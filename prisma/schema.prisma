@@ -1,0 +1,374 @@
+// Schema Prisma para SaaS Multi-tenant
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========================================
+// MODELOS CORE (TENANT)
+// ========================================
+
+model Client {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique // Para identificar via subdomínio
+  email     String   @unique
+  phone     String?
+  logo      String?
+  website   String?
+  status    ClientStatus @default(ACTIVE)
+  
+  // Configurações específicas
+  settings  Json     @default("{}")
+  
+  // Controle de assinatura
+  plan      String   @default("basic")
+  expiresAt DateTime?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relacionamentos
+  users          User[]
+  appointments   Appointment[]
+  orders         Order[]
+  products       Product[]
+  services       Service[]
+  employees      Employee[]
+  categories     Category[]
+  
+  @@map("clients")
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  TRIAL
+}
+
+// ========================================
+// GESTÃO DE USUÁRIOS E AUTENTICAÇÃO
+// ========================================
+
+model User {
+  id        String   @id @default(uuid())
+  clientId  String   @map("client_id")
+  
+  // Dados pessoais
+  name      String
+  email     String
+  phone     String?
+  avatar    String?
+  
+  // Autenticação
+  password  String
+  role      UserRole @default(CLIENT)
+  status    UserStatus @default(ACTIVE)
+  
+  // Controle de tentativas de login
+  failedLoginAttempts Int @default(0)
+  lockedUntil        DateTime?
+  lastLogin          DateTime?
+  
+  // Email verification
+  emailVerified      Boolean @default(false)
+  emailVerifiedAt    DateTime?
+  emailVerificationToken String?
+  
+  // Reset de senha
+  passwordResetToken String?
+  passwordResetTokenExpiresAt DateTime?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relacionamentos
+  client         Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  appointments   Appointment[]
+  orders         Order[]
+  refreshTokens  RefreshToken[]
+  
+  @@unique([clientId, email])
+  @@map("users")
+}
+
+enum UserRole {
+  SUPER_ADMIN    // Seu acesso especial
+  ADMIN          // Admin da empresa cliente
+  EMPLOYEE       // Funcionário da empresa
+  CLIENT         // Cliente final
+  GUEST          // Visitante (limitado)
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("refresh_tokens")
+}
+
+// ========================================
+// FUNCIONÁRIOS E SERVIÇOS
+// ========================================
+
+model Employee {
+  id          String   @id @default(uuid())
+  clientId    String   @map("client_id")
+  
+  name        String
+  email       String
+  phone       String?
+  avatar      String?
+  position    String
+  description String?
+  
+  // Disponibilidade
+  workingHours Json    @default("{}")
+  isActive     Boolean @default(true)
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relacionamentos
+  client       Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+  services     Service[]
+  
+  @@unique([clientId, email])
+  @@map("employees")
+}
+
+model Service {
+  id          String   @id @default(uuid())
+  clientId    String   @map("client_id")
+  
+  name        String
+  description String?
+  duration    Int      // em minutos
+  price       Decimal  @db.Decimal(10, 2)
+  isActive    Boolean  @default(true)
+  
+  // Configurações
+  maxAdvanceBooking Int? // dias de antecedência máxima
+  minAdvanceBooking Int? // dias de antecedência mínima
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relacionamentos
+  client       Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  employees    Employee[]
+  appointments Appointment[]
+  
+  @@map("services")
+}
+
+// ========================================
+// AGENDAMENTOS
+// ========================================
+
+model Appointment {
+  id          String   @id @default(uuid())
+  clientId    String   @map("client_id")
+  userId      String   @map("user_id")
+  employeeId  String   @map("employee_id")
+  serviceId   String   @map("service_id")
+  
+  // Detalhes do agendamento
+  startTime   DateTime
+  endTime     DateTime
+  status      AppointmentStatus @default(SCHEDULED)
+  notes       String?
+  
+  // Pagamento
+  price       Decimal? @db.Decimal(10, 2)
+  paymentStatus PaymentStatus @default(PENDING)
+  paymentMethod String?
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relacionamentos
+  client   Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+  service  Service  @relation(fields: [serviceId], references: [id])
+  
+  @@map("appointments")
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+// ========================================
+// PEDIDOS E PRODUTOS
+// ========================================
+
+model Category {
+  id       String @id @default(uuid())
+  clientId String @map("client_id")
+  
+  name        String
+  description String?
+  isActive    Boolean @default(true)
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relacionamentos
+  client   Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  products Product[]
+  
+  @@map("categories")
+}
+
+model Product {
+  id         String  @id @default(uuid())
+  clientId   String  @map("client_id")
+  categoryId String? @map("category_id")
+  
+  name        String
+  description String?
+  price       Decimal @db.Decimal(10, 2)
+  image       String?
+  sku         String?
+  
+  // Estoque
+  stock       Int     @default(0)
+  minStock    Int     @default(0)
+  
+  // Status
+  isActive    Boolean @default(true)
+  isFeatured  Boolean @default(false)
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relacionamentos
+  client     Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  category   Category?  @relation(fields: [categoryId], references: [id])
+  orderItems OrderItem[]
+  
+  @@unique([clientId, sku])
+  @@map("products")
+}
+
+model Order {
+  id       String @id @default(uuid())
+  clientId String @map("client_id")
+  userId   String @map("user_id")
+  
+  // Detalhes do pedido
+  orderNumber String  @unique
+  status      OrderStatus @default(PENDING)
+  total       Decimal @db.Decimal(10, 2)
+  
+  // Entrega
+  deliveryAddress String?
+  deliveryFee     Decimal? @db.Decimal(10, 2)
+  
+  // Pagamento
+  paymentStatus PaymentStatus @default(PENDING)
+  paymentMethod String?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relacionamentos
+  client Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User       @relation(fields: [userId], references: [id])
+  items  OrderItem[]
+  
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String @id @default(uuid())
+  orderId   String @map("order_id")
+  productId String @map("product_id")
+  
+  quantity  Int
+  price     Decimal @db.Decimal(10, 2)
+  subtotal  Decimal @db.Decimal(10, 2)
+  
+  // Relacionamentos
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+  
+  @@map("order_items")
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+// ========================================
+// AUDITORIA E LOGS
+// ========================================
+
+model AuditLog {
+  id       String @id @default(uuid())
+  clientId String @map("client_id")
+  
+  userId   String? @map("user_id")
+  action   String  // CREATE, UPDATE, DELETE, LOGIN, etc
+  entity   String  // tabela afetada
+  entityId String? @map("entity_id")
+  
+  // Dados da alteração
+  oldValues Json?
+  newValues Json?
+  
+  // Metadata
+  ipAddress String?
+  userAgent String?
+  
+  createdAt DateTime @default(now())
+  
+  @@map("audit_logs")
+} 
