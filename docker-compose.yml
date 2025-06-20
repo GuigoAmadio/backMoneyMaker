@@ -10,14 +10,14 @@ services:
       POSTGRES_USER: ${DATABASE_USER:-postgres}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres123}
     ports:
-      - "${DATABASE_PORT:-5432}:5432"
+      - '${DATABASE_PORT:-5432}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - moneymaker-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-postgres}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${DATABASE_USER:-postgres}']
       interval: 30s
       timeout: 10s
       retries: 5
@@ -27,13 +27,13 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - '${REDIS_PORT:-6379}:6379'
     volumes:
       - redis_data:/data
     networks:
       - moneymaker-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 30s
       timeout: 10s
       retries: 5
@@ -46,8 +46,10 @@ services:
       target: development
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - '${APP_PORT:-3000}:3000'
     environment:
+      JWT_SECRET: 'e96e27377004b123200928ce0abaedb1'
+      JWT_EXPIRATION: '1h'
       DATABASE_URL: postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres123}@postgres:5432/${DATABASE_NAME:-moneymaker}
       REDIS_URL: redis://redis:6379
       NODE_ENV: ${NODE_ENV:-development}
@@ -71,8 +73,10 @@ services:
       target: production
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - '${APP_PORT:-3000}:3000'
     environment:
+      JWT_SECRET: 'e96e27377004b123200928ce0abaedb1'
+      JWT_EXPIRATION: '1h'
       DATABASE_URL: postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres123}@postgres:5432/${DATABASE_NAME:-moneymaker}
       REDIS_URL: redis://redis:6379
       NODE_ENV: production
@@ -92,4 +96,4 @@ volumes:
 
 networks:
   moneymaker-network:
-    driver: bridge 
+    driver: bridge

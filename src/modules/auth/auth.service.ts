@@ -208,20 +208,9 @@ export class AuthService {
    * Obter perfil do usuário autenticado
    */
   async getProfile(user: any) {
-    const fullUser = await this.prisma.user.findUnique({
-      where: { id: user.sub },
-      include: {
-        client: {
-          select: { id: true, name: true, status: true },
-        },
-      },
-    });
-
-    if (!fullUser) {
-      throw new UnauthorizedException('Usuário não encontrado');
-    }
-
-    const { password: _, ...userWithoutPassword } = fullUser;
+    // O user já vem da estratégia JWT com todos os dados necessários
+    // Apenas remover a senha se estiver presente e retornar
+    const { password: _, ...userWithoutPassword } = user;
     return userWithoutPassword;
   }
 
