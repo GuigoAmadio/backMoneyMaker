@@ -22,6 +22,9 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "ts-node prisma/seed.ts",
+    "prisma:seed-intensive": "ts-node prisma/intensive-seed.ts",
+    "test:users": "ts-node scripts/create-test-users.ts",
+    "test:performance": "ts-node scripts/performance-tests.ts",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f"

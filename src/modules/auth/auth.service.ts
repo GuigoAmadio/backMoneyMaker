@@ -27,7 +27,8 @@ export class AuthService {
    * Validar usuário para estratégia local
    */
   async validateUser(email: string, password: string, clientId?: string) {
-    const user = await this.prisma.user.findFirst({
+    // Primeira tentativa: buscar usuário com clientId (se fornecido)
+    let user = await this.prisma.user.findFirst({
       where: {
         email,
         ...(clientId && { clientId }),
@@ -39,6 +40,22 @@ export class AuthService {
         },
       },
     });
+
+    // Se não encontrou usuário e há clientId, tentar buscar SUPER_ADMIN sem filtro de clientId
+    if (!user && clientId) {
+      user = await this.prisma.user.findFirst({
+        where: {
+          email,
+          role: 'SUPER_ADMIN',
+          status: 'ACTIVE',
+        },
+        include: {
+          client: {
+            select: { id: true, name: true, status: true },
+          },
+        },
+      });
+    }
 
     if (!user) {
       throw new UnauthorizedException('Credenciais inválidas');

@@ -16,31 +16,37 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   // Configurações de segurança
-  app.use(helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'"],
-        imgSrc: ["'self'", 'data:', 'https:'],
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrc: ["'self'"],
+          imgSrc: ["'self'", 'data:', 'https:'],
+        },
       },
-    },
-    hsts: {
-      maxAge: 31536000,
-      includeSubDomains: true,
-      preload: true,
-    },
-  }));
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+      },
+    }),
+  );
 
   // Compressão
   app.use(compression());
 
-  // CORS configurável
-  const corsOrigins = configService.get('CORS_ORIGINS')?.split(',') || ['http://localhost:3000'];
+  // CORS configurável - Incluindo porta 3001 para BemMeCare
+  const corsOrigins = configService.get('CORS_ORIGINS')?.split(',') || [
+    'http://localhost:3000',
+    'http://localhost:3001', // BemMeCare frontend
+    'http://localhost:3002', // Outros frontends
+  ];
   app.enableCors({
     origin: corsOrigins,
     methods: configService.get('CORS_METHODS') || 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    credentials: configService.get('CORS_CREDENTIALS') === 'true',
+    credentials: configService.get('CORS_CREDENTIALS') === 'true' || true, // Habilitar credentials por padrão
     allowedHeaders: [
       'Origin',
       'X-Requested-With',
@@ -117,7 +123,7 @@ async function bootstrap() {
 
   // Porta da aplicação
   const port = configService.get('APP_PORT') || 3000;
-  
+
   await app.listen(port);
 
   console.log(`🚀 Aplicação rodando na porta ${port}`);
@@ -125,4 +131,4 @@ async function bootstrap() {
   console.log(`🌍 Ambiente: ${configService.get('NODE_ENV')}`);
 }
 
-bootstrap(); 
+bootstrap();
