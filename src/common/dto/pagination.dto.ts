@@ -52,4 +52,4 @@ export interface PaginatedResult<T> {
     hasNext: boolean;
     hasPrevious: boolean;
   };
-} 
+}

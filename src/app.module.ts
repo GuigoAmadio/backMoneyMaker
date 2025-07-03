@@ -18,6 +18,7 @@ import { OrdersModule } from './modules/orders/orders.module';
 import { ProductsModule } from './modules/products/products.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { PropertiesModule } from './modules/properties/properties.module';
+import { EcommerceModule } from './modules/ecommerce/ecommerce.module';
 
 @Module({
   imports: [
@@ -54,6 +55,9 @@ import { PropertiesModule } from './modules/properties/properties.module';
     ProductsModule,
     DashboardModule,
     PropertiesModule,
+
+    // Ecommerce
+    EcommerceModule,
   ],
   controllers: [AppController],
   providers: [AppService],

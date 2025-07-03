@@ -20,4 +20,4 @@ export class AppController {
   getHealth(): object {
     return this.appService.getHealth();
   }
-} 
+}

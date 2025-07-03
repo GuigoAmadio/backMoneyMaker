@@ -30,7 +30,7 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('Usuário não autenticado');
     }
 
-    const hasRole = requiredRoles.some(role => {
+    const hasRole = requiredRoles.some((role) => {
       // SUPER_ADMIN tem acesso a tudo
       if (user.role === UserRole.SUPER_ADMIN) {
         return true;
@@ -40,11 +40,9 @@ export class RolesGuard implements CanActivate {
     });
 
     if (!hasRole) {
-      throw new ForbiddenException(
-        `Acesso negado. Roles necessárias: ${requiredRoles.join(', ')}`
-      );
+      throw new ForbiddenException(`Acesso negado. Roles necessárias: ${requiredRoles.join(', ')}`);
     }
 
     return true;
   }
-} 
+}

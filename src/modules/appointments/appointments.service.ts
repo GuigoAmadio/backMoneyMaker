@@ -15,7 +15,9 @@ export class AppointmentsService {
     endDate?: string,
     categoryId?: string,
   ) {
-    const where: any = { clientId };
+    const where: any = {
+      clientId, // Filtrar por cliente
+    };
 
     if (startDate || endDate) {
       where.startTime = {};
@@ -32,17 +34,13 @@ export class AppointmentsService {
     const appointments = await this.prisma.appointment.findMany({
       where,
       include: {
-        service: {
-          include: {
-            category: true,
-          },
-        },
-        user: {
+        service: true,
+        user: true,
+        employee: {
           select: {
             id: true,
             name: true,
             email: true,
-            phone: true,
           },
         },
       },
@@ -55,25 +53,21 @@ export class AppointmentsService {
       success: true,
       data: appointments.map((appointment) => ({
         id: appointment.id,
-        title: `${appointment.service?.name} - ${appointment.user?.name}`,
-        start: appointment.startTime,
-        end: appointment.endTime,
+        startTime: appointment.startTime,
+        endTime: appointment.endTime,
         status: appointment.status,
-        description: appointment.description,
-        category: appointment.service?.category,
         service: {
-          id: appointment.service?.id,
           name: appointment.service?.name,
           price: Number(appointment.service?.price) || 0,
         },
-        client: {
-          id: appointment.user?.id,
+        user: {
           name: appointment.user?.name,
           email: appointment.user?.email,
-          phone: appointment.user?.phone,
         },
-        backgroundColor: appointment.service?.category?.color || '#3B82F6',
-        borderColor: appointment.service?.category?.color || '#3B82F6',
+        employee: {
+          name: appointment.employee?.name,
+          email: appointment.employee?.email,
+        },
       })),
     };
   }
@@ -117,7 +111,7 @@ export class AppointmentsService {
       data: {
         appointments: result.data,
         totalToday: result.data?.length || 0,
-        revenue: result.data?.reduce((sum, apt) => sum + apt.service.price, 0) || 0,
+        revenue: result.data?.reduce((sum, apt) => sum + (apt.service?.price || 0), 0) || 0,
       },
     };
   }
@@ -186,7 +180,6 @@ export class AppointmentsService {
     const categories = await this.prisma.category.findMany({
       where: {
         clientId,
-        type: 'service',
       },
       orderBy: { name: 'asc' },
     });
@@ -217,9 +210,9 @@ export class AppointmentsService {
   }
 
   /**
-   * Obter horários disponíveis
+   * Buscar slots disponíveis para agendamento
    */
-  async getAvailableSlots(clientId: string, dateString: string, duration: number = 60) {
+  async getAvailableSlots(dateString: string, duration: number = 60) {
     const date = new Date(dateString);
     const startOfDay = new Date(date);
     startOfDay.setHours(8, 0, 0, 0); // Horário de início: 8h
@@ -230,7 +223,6 @@ export class AppointmentsService {
     // Buscar agendamentos existentes do dia
     const existingAppointments = await this.prisma.appointment.findMany({
       where: {
-        clientId,
         startTime: {
           gte: startOfDay,
           lt: new Date(date.getTime() + 24 * 60 * 60 * 1000),
@@ -279,12 +271,15 @@ export class AppointmentsService {
    */
   async findAll(clientId: string, paginationDto: any, filters: any) {
     const { page = 1, limit = 10 } = paginationDto;
-    const { status, serviceId, startDate, endDate } = filters;
+    const { status, serviceId, startDate, endDate, employeeId } = filters;
 
-    const where: any = { clientId };
+    const where: any = {
+      clientId, // Filtrar por cliente
+    };
 
     if (status) where.status = status;
     if (serviceId) where.serviceId = serviceId;
+    if (employeeId) where.employeeId = employeeId;
     if (startDate || endDate) {
       where.startTime = {};
       if (startDate) where.startTime.gte = new Date(startDate);
@@ -296,8 +291,12 @@ export class AppointmentsService {
         where,
         include: {
           service: {
-            include: {
-              category: true,
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              duration: true,
+              price: true,
             },
           },
           user: {
@@ -306,6 +305,14 @@ export class AppointmentsService {
               name: true,
               email: true,
               phone: true,
+            },
+          },
+          employee: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              position: true,
             },
           },
         },
@@ -339,11 +346,18 @@ export class AppointmentsService {
    */
   async findOne(id: string, clientId: string) {
     const appointment = await this.prisma.appointment.findFirst({
-      where: { id, clientId },
+      where: {
+        id,
+        clientId,
+      },
       include: {
         service: {
-          include: {
-            category: true,
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            duration: true,
+            price: true,
           },
         },
         user: {
@@ -352,6 +366,14 @@ export class AppointmentsService {
             name: true,
             email: true,
             phone: true,
+          },
+        },
+        employee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            position: true,
           },
         },
       },
@@ -376,16 +398,17 @@ export class AppointmentsService {
   /**
    * Criar agendamento
    */
-  async create(data: any, clientId: string) {
+  async create(data: any) {
     const appointment = await this.prisma.appointment.create({
-      data: {
-        ...data,
-        clientId,
-      },
+      data,
       include: {
         service: {
-          include: {
-            category: true,
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            duration: true,
+            price: true,
           },
         },
         user: {
@@ -415,14 +438,27 @@ export class AppointmentsService {
   /**
    * Atualizar agendamento
    */
-  async update(id: string, data: any, clientId: string) {
+  async update(id: string, clientId: string, data: any) {
+    // Verificar se o appointment pertence ao cliente
+    const existingAppointment = await this.prisma.appointment.findFirst({
+      where: { id, clientId },
+    });
+
+    if (!existingAppointment) {
+      throw new NotFoundException('Agendamento não encontrado');
+    }
+
     const appointment = await this.prisma.appointment.update({
       where: { id },
       data,
       include: {
         service: {
-          include: {
-            category: true,
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            duration: true,
+            price: true,
           },
         },
         user: {
@@ -452,9 +488,9 @@ export class AppointmentsService {
   /**
    * Deletar agendamento
    */
-  async remove(id: string, clientId: string) {
+  async remove(id: string) {
     const appointment = await this.prisma.appointment.findFirst({
-      where: { id, clientId },
+      where: { id },
     });
 
     if (!appointment) {
@@ -474,7 +510,7 @@ export class AppointmentsService {
   /**
    * Atualizar status do agendamento
    */
-  async updateStatus(id: string, status: AppointmentStatus, clientId: string) {
+  async updateStatus(id: string, status: AppointmentStatus) {
     const updatedAppointment = await this.prisma.appointment.update({
       where: { id },
       data: { status },
@@ -490,13 +526,13 @@ export class AppointmentsService {
   /**
    * Criar múltiplos agendamentos
    */
-  async createBulk(appointments: any[], clientId: string) {
+  async createBulk(appointments: any[]) {
     const results = [];
     const errors = [];
 
     for (const appointmentData of appointments) {
       try {
-        const result = await this.create(appointmentData, clientId);
+        const result = await this.create(appointmentData);
         results.push(result.data);
       } catch (error) {
         errors.push({
@@ -522,13 +558,11 @@ export class AppointmentsService {
 
   // Métodos auxiliares privados
   private async checkTimeConflict(
-    clientId: string,
     startTime: Date,
     endTime: Date,
     excludeId?: string,
   ): Promise<boolean> {
     const where: any = {
-      clientId,
       OR: [
         {
           startTime: {

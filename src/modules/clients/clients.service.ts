@@ -79,7 +79,6 @@ export class ClientsService {
         _count: {
           select: {
             users: true,
-            appointments: true,
             orders: true,
           },
         },

@@ -26,7 +26,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const responseBody = exception.getResponse();
-      
+
       if (typeof responseBody === 'object') {
         message = (responseBody as any).message || exception.message;
         errors = (responseBody as any).errors || null;
@@ -49,7 +49,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     // Log do erro
     this.logger.error(
       `${request.method} ${request.url} - ${status} - ${message}`,
-      exception instanceof Error ? exception.stack : exception
+      exception instanceof Error ? exception.stack : exception,
     );
 
     // Resposta padronizada
@@ -69,7 +69,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
     response.status(status).json(errorResponse);
   }
 
-  private handlePrismaError(error: PrismaClientKnownRequestError): { status: number; message: string } {
+  private handlePrismaError(error: PrismaClientKnownRequestError): {
+    status: number;
+    message: string;
+  } {
     switch (error.code) {
       case 'P2002':
         return {
@@ -98,4 +101,4 @@ export class HttpExceptionFilter implements ExceptionFilter {
         };
     }
   }
-} 
+}

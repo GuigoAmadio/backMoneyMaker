@@ -9,4 +9,4 @@ export class RefreshTokenDto {
   @IsString()
   @IsUUID()
   refreshToken: string;
-} 
+}

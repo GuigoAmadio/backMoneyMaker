@@ -8,8 +8,6 @@ import { TenantService } from './tenant.service';
 })
 export class TenantModule {
   configure(consumer: any) {
-    consumer
-      .apply(TenantMiddleware)
-      .forRoutes('*');
+    consumer.apply(TenantMiddleware).forRoutes('*');
   }
-} 
+}

@@ -9,12 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 
 import { ClientsService } from './clients.service';
 import { CreateClientDto } from './dto/create-client.dto';
@@ -80,10 +75,7 @@ export class ClientsController {
   @Roles(UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Atualizar status do cliente' })
   @ApiResponse({ status: 200, description: 'Status atualizado com sucesso' })
-  updateStatus(
-    @Param('id') id: string,
-    @Body('status') status: string,
-  ) {
+  updateStatus(@Param('id') id: string, @Body('status') status: string) {
     return this.clientsService.updateStatus(id, status);
   }
-} 
+}

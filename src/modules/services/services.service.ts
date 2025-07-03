@@ -13,28 +13,17 @@ import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto'
 export class ServicesService {
   constructor(private prisma: PrismaService) {}
 
-  async create(createServiceDto: CreateServiceDto, clientId: string) {
-    // Verificar se o nome já está em uso neste cliente
+  async create(clientId: string, createServiceDto: CreateServiceDto) {
+    // Verificar se o nome já está em uso
     const existingService = await this.prisma.service.findFirst({
       where: {
-        name: createServiceDto.name,
         clientId,
+        name: createServiceDto.name,
       },
     });
 
     if (existingService) {
       throw new ConflictException('Nome do serviço já está em uso');
-    }
-
-    // Validar regra de negócio: antecedência mínima não pode ser maior que máxima
-    if (
-      createServiceDto.minAdvanceBooking &&
-      createServiceDto.maxAdvanceBooking &&
-      createServiceDto.minAdvanceBooking > createServiceDto.maxAdvanceBooking
-    ) {
-      throw new BadRequestException(
-        'Antecedência mínima não pode ser maior que a antecedência máxima',
-      );
     }
 
     const service = await this.prisma.service.create({
@@ -43,9 +32,6 @@ export class ServicesService {
         clientId,
       },
       include: {
-        client: {
-          select: { id: true, name: true },
-        },
         employees: {
           select: { id: true, name: true, email: true, position: true, isActive: true },
         },
@@ -130,13 +116,10 @@ export class ServicesService {
     };
   }
 
-  async findOne(id: string, clientId: string) {
+  async findOne(clientId: string, id: string) {
     const service = await this.prisma.service.findFirst({
       where: { id, clientId },
       include: {
-        client: {
-          select: { id: true, name: true },
-        },
         employees: {
           select: {
             id: true,
@@ -179,7 +162,7 @@ export class ServicesService {
     };
   }
 
-  async update(id: string, updateServiceDto: UpdateServiceDto, clientId: string) {
+  async update(clientId: string, id: string, updateServiceDto: UpdateServiceDto) {
     const service = await this.prisma.service.findFirst({
       where: { id, clientId },
     });
@@ -192,8 +175,8 @@ export class ServicesService {
     if (updateServiceDto.name) {
       const existingService = await this.prisma.service.findFirst({
         where: {
-          name: updateServiceDto.name,
           clientId,
+          name: updateServiceDto.name,
           NOT: { id },
         },
       });
@@ -203,23 +186,10 @@ export class ServicesService {
       }
     }
 
-    // Validar regra de negócio: antecedência mínima não pode ser maior que máxima
-    const minAdvance = updateServiceDto.minAdvanceBooking ?? service.minAdvanceBooking;
-    const maxAdvance = updateServiceDto.maxAdvanceBooking ?? service.maxAdvanceBooking;
-
-    if (minAdvance && maxAdvance && minAdvance > maxAdvance) {
-      throw new BadRequestException(
-        'Antecedência mínima não pode ser maior que a antecedência máxima',
-      );
-    }
-
     const updatedService = await this.prisma.service.update({
       where: { id },
       data: updateServiceDto,
       include: {
-        client: {
-          select: { id: true, name: true },
-        },
         employees: {
           select: { id: true, name: true, email: true, position: true },
         },
@@ -233,7 +203,7 @@ export class ServicesService {
     };
   }
 
-  async remove(id: string, clientId: string) {
+  async remove(clientId: string, id: string) {
     const service = await this.prisma.service.findFirst({
       where: { id, clientId },
       include: {
@@ -268,7 +238,7 @@ export class ServicesService {
     };
   }
 
-  async updateStatus(id: string, isActive: boolean, clientId: string) {
+  async updateStatus(clientId: string, id: string, isActive: boolean) {
     const service = await this.prisma.service.findFirst({
       where: { id, clientId },
     });
@@ -280,11 +250,6 @@ export class ServicesService {
     const updatedService = await this.prisma.service.update({
       where: { id },
       data: { isActive },
-      include: {
-        client: {
-          select: { id: true, name: true },
-        },
-      },
     });
 
     return {

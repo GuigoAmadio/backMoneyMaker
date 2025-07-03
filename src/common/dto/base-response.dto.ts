@@ -41,4 +41,4 @@ export class ErrorResponseDto {
 
   @ApiProperty({ description: 'Método HTTP da requisição' })
   method: string;
-} 
+}

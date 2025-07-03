@@ -100,7 +100,7 @@ export class AppointmentsController {
     @Query('duration') duration?: string,
   ) {
     const durationMinutes = duration ? parseInt(duration) : 60;
-    return await this.appointmentsService.getAvailableSlots(clientId, date, durationMinutes);
+    return await this.appointmentsService.getAvailableSlots(date, durationMinutes);
   }
 
   @Get()
@@ -141,7 +141,12 @@ export class AppointmentsController {
   @ApiResponse({ status: 400, description: 'Dados inválidos' })
   @ApiResponse({ status: 409, description: 'Conflito de horário' })
   async create(@Body() createAppointmentDto: any, @Tenant() clientId: string) {
-    return await this.appointmentsService.create(createAppointmentDto, clientId);
+    // Adicionar clientId aos dados do appointment
+    const appointmentData = {
+      ...createAppointmentDto,
+      clientId,
+    };
+    return await this.appointmentsService.create(appointmentData);
   }
 
   @Patch(':id')
@@ -154,7 +159,7 @@ export class AppointmentsController {
     @Body() updateAppointmentDto: any,
     @Tenant() clientId: string,
   ) {
-    return await this.appointmentsService.update(id, updateAppointmentDto, clientId);
+    return await this.appointmentsService.update(id, clientId, updateAppointmentDto);
   }
 
   @Delete(':id')
@@ -162,7 +167,7 @@ export class AppointmentsController {
   @ApiResponse({ status: 200, description: 'Agendamento deletado com sucesso' })
   @ApiResponse({ status: 404, description: 'Agendamento não encontrado' })
   async remove(@Param('id') id: string, @Tenant() clientId: string) {
-    return await this.appointmentsService.remove(id, clientId);
+    return await this.appointmentsService.remove(id);
   }
 
   @Patch(':id/status')
@@ -173,13 +178,13 @@ export class AppointmentsController {
     @Body('status') status: string,
     @Tenant() clientId: string,
   ) {
-    return await this.appointmentsService.updateStatus(id, status as AppointmentStatus, clientId);
+    return await this.appointmentsService.updateStatus(id, status as AppointmentStatus);
   }
 
   @Post('bulk')
   @ApiOperation({ summary: 'Criar múltiplos agendamentos' })
   @ApiResponse({ status: 201, description: 'Agendamentos criados com sucesso' })
   async createBulk(@Body() appointments: any[], @Tenant() clientId: string) {
-    return await this.appointmentsService.createBulk(appointments, clientId);
+    return await this.appointmentsService.createBulk(appointments);
   }
 }

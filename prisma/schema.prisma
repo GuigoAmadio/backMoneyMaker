@@ -35,12 +35,11 @@ model Client {
   
   // Relacionamentos
   users          User[]
-  appointments   Appointment[]
   orders         Order[]
   products       Product[]
-  services       Service[]
   employees      Employee[]
   categories     Category[]
+  services       Service[]
   properties     Property[]
   propertyVisits PropertyVisit[]
   propertyLeads  PropertyLead[]
@@ -49,6 +48,13 @@ model Client {
   doctors        Doctor[]
   doctorAppointments DoctorAppointment[]
   patients       Patient[]
+  appointments   Appointment[]
+  
+  // Relacionamentos do ecommerce
+  customers      Customer[]
+  ecommerceOrders EcommerceOrder[]
+  payments       Payment[]
+  coupons        Coupon[]
   
   @@map("clients")
 }
@@ -172,27 +178,20 @@ model Service {
   id          String   @id @default(uuid())
   clientId    String   @map("client_id")
   categoryId  String?  @map("category_id")
-  
   name        String
   description String?
-  duration    Int      // em minutos
+  duration    Int
   price       Decimal  @db.Decimal(10, 2)
   isActive    Boolean  @default(true)
-  
-  // Configurações
-  maxAdvanceBooking Int? // dias de antecedência máxima
-  minAdvanceBooking Int? // dias de antecedência mínima
-  
-  // Timestamps
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   // Relacionamentos
-  client       Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   category     Category? @relation(fields: [categoryId], references: [id])
   employees    Employee[]
   appointments Appointment[]
-  
+
   @@map("services")
 }
 
@@ -206,29 +205,19 @@ model Appointment {
   userId      String   @map("user_id")
   employeeId  String   @map("employee_id")
   serviceId   String   @map("service_id")
-  
-  // Detalhes do agendamento
   startTime   DateTime
   endTime     DateTime
   status      AppointmentStatus @default(SCHEDULED)
-  notes       String?
   description String?
-  
-  // Pagamento
-  price       Decimal? @db.Decimal(10, 2)
-  paymentStatus PaymentStatus @default(PENDING)
-  paymentMethod String?
-  
-  // Timestamps
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   // Relacionamentos
   client   Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   user     User     @relation(fields: [userId], references: [id])
   employee Employee @relation(fields: [employeeId], references: [id])
   service  Service  @relation(fields: [serviceId], references: [id])
-  
+
   @@map("appointments")
 }
 
@@ -296,6 +285,13 @@ model Product {
   category   Category?  @relation(fields: [categoryId], references: [id])
   orderItems OrderItem[]
   stockMovements StockMovement[]
+  
+  // Relacionamentos do ecommerce
+  cartItems     CartItem[]
+  ecommerceOrderItems EcommerceOrderItem[]
+  productVariants ProductVariant[]
+  reviews       Review[]
+  wishlistItems WishlistItem[]
   
   @@unique([clientId, sku])
   @@map("products")
@@ -711,4 +707,565 @@ enum Gender {
   MALE
   FEMALE
   OTHER
-} 
+}
+
+// ========================================
+// ECOMMERCE - INFRAESTRUTURA COMPLETA
+// ========================================
+
+// Customer - Clientes finais do ecommerce (diferentes dos Users que são da empresa)
+model Customer {
+  id       String @id @default(uuid())
+  clientId String @map("client_id")
+  
+  // Dados pessoais
+  firstName String @map("first_name")
+  lastName  String @map("last_name")
+  email     String
+  phone     String?
+  document  String? // CPF/CNPJ
+  birthDate DateTime? @map("birth_date")
+  gender    Gender?
+  
+  // Autenticação (para login no ecommerce)
+  password  String?
+  isActive  Boolean @default(true)
+  emailVerified Boolean @default(false)
+  
+  // Preferências
+  preferences Json @default("{}")
+  marketingOptIn Boolean @default(true) @map("marketing_opt_in")
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastLoginAt DateTime? @map("last_login_at")
+  
+  // Relacionamentos
+  client        Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  addresses     Address[]
+  ecommerceOrders EcommerceOrder[]
+  carts         Cart[]
+  reviews       Review[]
+  wishlists     Wishlist[]
+  payments      Payment[]
+  
+  @@unique([clientId, email])
+  @@unique([clientId, document])
+  @@map("customers")
+}
+
+// Endereços de entrega/cobrança
+model Address {
+  id         String @id @default(uuid())
+  customerId String @map("customer_id")
+  
+  // Identificação
+  label      String?  // "Casa", "Trabalho", etc
+  isDefault  Boolean @default(false) @map("is_default")
+  type       AddressType @default(SHIPPING)
+  
+  // Dados do endereço
+  recipientName String @map("recipient_name")
+  street       String
+  number       String
+  complement   String?
+  neighborhood String
+  city         String
+  state        String
+  zipCode      String @map("zip_code")
+  country      String @default("BR")
+  
+  // Referência geográfica
+  latitude     Float?
+  longitude    Float?
+  
+  // Timestamps
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Relacionamentos
+  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  shippingOrders EcommerceOrder[] @relation("ShippingAddress")
+  billingOrders  EcommerceOrder[] @relation("BillingAddress")
+  
+  @@map("addresses")
+}
+
+enum AddressType {
+  SHIPPING  // Entrega
+  BILLING   // Cobrança
+  BOTH      // Ambos
+}
+
+// Carrinho de compras
+model Cart {
+  id         String @id @default(uuid())
+  customerId String @map("customer_id")
+  
+  // Status
+  status     CartStatus @default(ACTIVE)
+  expiresAt  DateTime? @map("expires_at")
+  
+  // Totais (calculados)
+  subtotal   Decimal @default(0) @db.Decimal(10, 2)
+  discount   Decimal @default(0) @db.Decimal(10, 2)
+  shipping   Decimal @default(0) @db.Decimal(10, 2)
+  tax        Decimal @default(0) @db.Decimal(10, 2)
+  total      Decimal @default(0) @db.Decimal(10, 2)
+  
+  // Cupom aplicado
+  couponId   String? @map("coupon_id")
+  
+  // Timestamps
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  // Relacionamentos
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items      CartItem[]
+  coupon     Coupon? @relation(fields: [couponId], references: [id])
+  
+  @@map("carts")
+}
+
+enum CartStatus {
+  ACTIVE
+  ABANDONED
+  CONVERTED
+  EXPIRED
+}
+
+// Itens do carrinho
+model CartItem {
+  id                String @id @default(uuid())
+  cartId            String @map("cart_id")
+  productId         String @map("product_id")
+  productVariantId  String? @map("product_variant_id")
+  
+  quantity          Int
+  unitPrice         Decimal @db.Decimal(10, 2) @map("unit_price")
+  totalPrice        Decimal @db.Decimal(10, 2) @map("total_price")
+  
+  // Personalizações/observações
+  customizations    Json? @default("{}")
+  notes             String?
+  
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relacionamentos
+  cart              Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product           Product @relation(fields: [productId], references: [id])
+  productVariant    ProductVariant? @relation(fields: [productVariantId], references: [id])
+  
+  @@map("cart_items")
+}
+
+// Pedidos do ecommerce (mais completos que Order simples)
+model EcommerceOrder {
+  id             String @id @default(uuid())
+  clientId       String @map("client_id")
+  customerId     String @map("customer_id")
+  
+  // Identificação
+  orderNumber    String @unique @map("order_number")
+  status         EcommerceOrderStatus @default(PENDING)
+  
+  // Endereços
+  shippingAddressId String? @map("shipping_address_id")
+  billingAddressId  String? @map("billing_address_id")
+  
+  // Valores
+  subtotal       Decimal @db.Decimal(10, 2)
+  discount       Decimal @default(0) @db.Decimal(10, 2)
+  shippingCost   Decimal @default(0) @db.Decimal(10, 2) @map("shipping_cost")
+  tax            Decimal @default(0) @db.Decimal(10, 2)
+  total          Decimal @db.Decimal(10, 2)
+  
+  // Pagamento
+  paymentStatus  PaymentStatus @default(PENDING) @map("payment_status")
+  paymentMethod  String? @map("payment_method")
+  
+  // Entrega
+  shippingMethod String? @map("shipping_method")
+  trackingCode   String? @map("tracking_code")
+  estimatedDelivery DateTime? @map("estimated_delivery")
+  deliveredAt    DateTime? @map("delivered_at")
+  
+  // Cupom
+  couponId       String? @map("coupon_id")
+  couponDiscount Decimal @default(0) @db.Decimal(10, 2) @map("coupon_discount")
+  
+  // Observações
+  notes          String?
+  internalNotes  String? @map("internal_notes")
+  
+  // Timestamps
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  confirmedAt    DateTime? @map("confirmed_at")
+  shippedAt      DateTime? @map("shipped_at")
+  cancelledAt    DateTime? @map("cancelled_at")
+  
+  // Relacionamentos
+  client         Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  customer       Customer @relation(fields: [customerId], references: [id])
+  shippingAddress Address? @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
+  billingAddress Address? @relation("BillingAddress", fields: [billingAddressId], references: [id])
+  items          EcommerceOrderItem[]
+  payments       Payment[]
+  shipments      Shipment[]
+  coupon         Coupon? @relation(fields: [couponId], references: [id])
+  reviews        Review[]
+  
+  @@map("ecommerce_orders")
+}
+
+enum EcommerceOrderStatus {
+  PENDING           // Aguardando pagamento
+  PAID              // Pago
+  CONFIRMED         // Confirmado
+  PROCESSING        // Processando
+  SHIPPED           // Enviado
+  OUT_FOR_DELIVERY  // Saiu para entrega
+  DELIVERED         // Entregue
+  CANCELLED         // Cancelado
+  REFUNDED          // Reembolsado
+  RETURNED          // Devolvido
+}
+
+// Itens do pedido ecommerce
+model EcommerceOrderItem {
+  id                String @id @default(uuid())
+  orderId           String @map("order_id")
+  productId         String @map("product_id")
+  productVariantId  String? @map("product_variant_id")
+  
+  quantity          Int
+  unitPrice         Decimal @db.Decimal(10, 2) @map("unit_price")
+  totalPrice        Decimal @db.Decimal(10, 2) @map("total_price")
+  
+  // Snapshot do produto no momento da compra
+  productName       String @map("product_name")
+  productImage      String? @map("product_image")
+  productSku        String? @map("product_sku")
+  
+  // Personalização
+  customizations    Json? @default("{}")
+  
+  // Timestamps
+  createdAt         DateTime @default(now())
+  
+  // Relacionamentos
+  order             EcommerceOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product           Product @relation(fields: [productId], references: [id])
+  productVariant    ProductVariant? @relation(fields: [productVariantId], references: [id])
+  
+  @@map("ecommerce_order_items")
+}
+
+// Pagamentos
+model Payment {
+  id         String @id @default(uuid())
+  clientId   String @map("client_id")
+  customerId String @map("customer_id")
+  orderId    String? @map("order_id")
+  
+  // Identificação
+  paymentNumber String @unique @map("payment_number")
+  method        PaymentMethod
+  status        PaymentStatus @default(PENDING)
+  
+  // Valores
+  amount        Decimal @db.Decimal(10, 2)
+  currency      String @default("BRL")
+  
+  // Gateway de pagamento
+  gateway       String? // "stripe", "mercadopago", "pagseguro"
+  gatewayId     String? @map("gateway_id")
+  gatewayData   Json? @map("gateway_data")
+  
+  // PIX (específico Brasil)
+  pixKey        String? @map("pix_key")
+  pixQrCode     String? @map("pix_qr_code")
+  
+  // Cartão (dados tokenizados)
+  cardLast4     String? @map("card_last4")
+  cardBrand     String? @map("card_brand")
+  
+  // Parcelamento
+  installments  Int @default(1)
+  
+  // Datas importantes
+  dueDate       DateTime? @map("due_date")
+  paidAt        DateTime? @map("paid_at")
+  failedAt      DateTime? @map("failed_at")
+  refundedAt    DateTime? @map("refunded_at")
+  
+  // Observações
+  notes         String?
+  failureReason String? @map("failure_reason")
+  
+  // Timestamps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relacionamentos
+  client        Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  customer      Customer @relation(fields: [customerId], references: [id])
+  order         EcommerceOrder? @relation(fields: [orderId], references: [id])
+  
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  CREDIT_CARD    // Cartão de Crédito
+  DEBIT_CARD     // Cartão de Débito
+  PIX            // PIX
+  BANK_SLIP      // Boleto
+  BANK_TRANSFER  // Transferência
+  CASH           // Dinheiro
+  PAYPAL         // PayPal
+  OTHER          // Outros
+}
+
+// Envios/entregas
+model Shipment {
+  id          String @id @default(uuid())
+  orderId     String @map("order_id")
+  
+  // Identificação
+  trackingCode String? @unique @map("tracking_code")
+  method      String // "correios", "transportadora", "motoboy"
+  status      ShipmentStatus @default(PREPARING)
+  
+  // Dimensões e peso
+  weight      Float?
+  width       Float?
+  height      Float?
+  length      Float?
+  
+  // Custos
+  cost        Decimal? @db.Decimal(10, 2)
+  
+  // Datas
+  estimatedDelivery DateTime? @map("estimated_delivery")
+  shippedAt         DateTime? @map("shipped_at")
+  deliveredAt       DateTime? @map("delivered_at")
+  
+  // Observações
+  notes       String?
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relacionamentos
+  order       EcommerceOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  trackings   ShipmentTracking[]
+  
+  @@map("shipments")
+}
+
+enum ShipmentStatus {
+  PREPARING     // Preparando
+  SHIPPED       // Enviado
+  IN_TRANSIT    // Em trânsito
+  OUT_FOR_DELIVERY // Saiu para entrega
+  DELIVERED     // Entregue
+  FAILED        // Falha na entrega
+  RETURNED      // Devolvido
+}
+
+// Rastreamento de envio
+model ShipmentTracking {
+  id         String @id @default(uuid())
+  shipmentId String @map("shipment_id")
+  
+  status     String
+  message    String
+  location   String?
+  datetime   DateTime
+  
+  // Timestamps
+  createdAt  DateTime @default(now())
+  
+  // Relacionamentos
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  
+  @@map("shipment_trackings")
+}
+
+// Variações de produtos (tamanho, cor, etc)
+model ProductVariant {
+  id        String @id @default(uuid())
+  productId String @map("product_id")
+  
+  // Identificação
+  name      String
+  sku       String?
+  
+  // Atributos de variação
+  size      String?
+  color     String?
+  material  String?
+  attributes Json? @default("{}")
+  
+  // Preços específicos
+  price     Decimal? @db.Decimal(10, 2)
+  comparePrice Decimal? @db.Decimal(10, 2) @map("compare_price")
+  
+  // Estoque específico
+  stock     Int @default(0)
+  
+  // Mídia específica
+  images    String[] @default([])
+  
+  // Status
+  isActive  Boolean @default(true)
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relacionamentos
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cartItems CartItem[]
+  orderItems EcommerceOrderItem[]
+  
+  @@unique([productId, sku])
+  @@map("product_variants")
+}
+
+// Avaliações de produtos
+model Review {
+  id         String @id @default(uuid())
+  productId  String @map("product_id")
+  customerId String @map("customer_id")
+  orderId    String? @map("order_id")
+  
+  // Avaliação
+  rating     Int // 1-5
+  title      String?
+  comment    String?
+  
+  // Mídia
+  images     String[] @default([])
+  
+  // Status
+  isPublished Boolean @default(false) @map("is_published")
+  isVerified  Boolean @default(false) @map("is_verified") // Compra verificada
+  
+  // Resposta da loja
+  response   String?
+  respondedAt DateTime? @map("responded_at")
+  
+  // Útil/não útil
+  helpfulCount Int @default(0) @map("helpful_count")
+  
+  // Timestamps
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  // Relacionamentos
+  product    Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order      EcommerceOrder? @relation(fields: [orderId], references: [id])
+  
+  @@unique([productId, customerId, orderId])
+  @@map("reviews")
+}
+
+// Cupons de desconto
+model Coupon {
+  id        String @id @default(uuid())
+  clientId  String @map("client_id")
+  
+  // Identificação
+  code      String
+  name      String
+  description String?
+  
+  // Tipo de desconto
+  type      CouponType
+  value     Decimal @db.Decimal(10, 2) // Valor ou percentual
+  
+  // Limitações
+  minAmount Decimal? @db.Decimal(10, 2) @map("min_amount") // Valor mínimo do pedido
+  maxDiscount Decimal? @db.Decimal(10, 2) @map("max_discount") // Desconto máximo
+  usageLimit Int? @map("usage_limit") // Quantas vezes pode ser usado
+  usedCount Int @default(0) @map("used_count")
+  
+  // Produtos aplicáveis
+  applicableProducts String[] @default([]) @map("applicable_products")
+  applicableCategories String[] @default([]) @map("applicable_categories")
+  
+  // Validade
+  startsAt  DateTime? @map("starts_at")
+  expiresAt DateTime? @map("expires_at")
+  
+  // Status
+  isActive  Boolean @default(true) @map("is_active")
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relacionamentos
+  client    Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  carts     Cart[]
+  orders    EcommerceOrder[]
+  
+  @@unique([clientId, code])
+  @@map("coupons")
+}
+
+enum CouponType {
+  PERCENTAGE // Percentual
+  FIXED      // Valor fixo
+  FREE_SHIPPING // Frete grátis
+}
+
+// Lista de desejos
+model Wishlist {
+  id         String @id @default(uuid())
+  customerId String @map("customer_id")
+  
+  name       String @default("Minha Lista")
+  isPublic   Boolean @default(false) @map("is_public")
+  
+  // Timestamps
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  // Relacionamentos
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items      WishlistItem[]
+  
+  @@map("wishlists")
+}
+
+// Itens da lista de desejos
+model WishlistItem {
+  id         String @id @default(uuid())
+  wishlistId String @map("wishlist_id")
+  productId  String @map("product_id")
+  
+  // Timestamp
+  createdAt  DateTime @default(now())
+  
+  // Relacionamentos
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  product    Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  @@unique([wishlistId, productId])
+  @@map("wishlist_items")
+}
+
+// ========================================
+// ATUALIZAÇÕES NOS MODELOS EXISTENTES
+// ========================================
+
+// Adicionando relacionamentos aos modelos existentes 

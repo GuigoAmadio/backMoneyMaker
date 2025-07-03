@@ -63,24 +63,10 @@ export class CreateServiceDto {
   isActive?: boolean;
 
   @ApiPropertyOptional({
-    description: 'Máximo de dias de antecedência para agendamento',
-    example: 30,
-    minimum: 1,
+    description: 'ID da categoria do serviço',
+    example: 'category-uuid',
   })
   @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(1, { message: 'Antecedência máxima deve ser de pelo menos 1 dia' })
-  maxAdvanceBooking?: number;
-
-  @ApiPropertyOptional({
-    description: 'Mínimo de dias de antecedência para agendamento',
-    example: 0,
-    minimum: 0,
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0, { message: 'Antecedência mínima deve ser 0 ou maior' })
-  minAdvanceBooking?: number;
+  @IsString()
+  categoryId?: string;
 }

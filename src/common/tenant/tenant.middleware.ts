@@ -37,7 +37,7 @@ export class TenantMiddleware implements NestMiddleware {
       // 3. Se ainda não encontrar, verificar se é uma rota que requer tenant
       if (!clientId && this.requiresTenant(req.path)) {
         throw new BadRequestException(
-          'Cliente não identificado. Forneça x-client-id no header ou use subdomínio válido'
+          'Cliente não identificado. Forneça x-client-id no header ou use subdomínio válido',
         );
       }
 
@@ -53,15 +53,9 @@ export class TenantMiddleware implements NestMiddleware {
   }
 
   private shouldSkipTenantCheck(path: string): boolean {
-    const skipPaths = [
-      '/api/health',
-      '/api/docs',
-      '/api',
-      '/',
-      '/health',
-    ];
-    
-    return skipPaths.some(skipPath => path.startsWith(skipPath));
+    const skipPaths = ['/api/health', '/api/docs', '/api', '/', '/health'];
+
+    return skipPaths.some((skipPath) => path.startsWith(skipPath));
   }
 
   private requiresTenant(path: string): boolean {
@@ -73,7 +67,7 @@ export class TenantMiddleware implements NestMiddleware {
       '/api/v1/products',
       '/api/v1/dashboard',
     ];
-    
-    return tenantRequiredPaths.some(tenantPath => path.startsWith(tenantPath));
+
+    return tenantRequiredPaths.some((tenantPath) => path.startsWith(tenantPath));
   }
-} 
+}

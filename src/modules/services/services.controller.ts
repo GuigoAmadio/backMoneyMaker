@@ -42,7 +42,7 @@ export class ServicesController {
   @ApiResponse({ status: 400, description: 'Dados inválidos' })
   @ApiResponse({ status: 409, description: 'Nome do serviço já está em uso' })
   create(@Body() createServiceDto: CreateServiceDto, @Tenant() clientId: string) {
-    return this.servicesService.create(createServiceDto, clientId);
+    return this.servicesService.create(clientId, createServiceDto);
   }
 
   @Get()
@@ -58,9 +58,9 @@ export class ServicesController {
   })
   findAll(
     @Query() paginationDto: PaginationDto,
+    @Tenant() clientId: string,
     @Query('search') search?: string,
     @Query('status') status?: string,
-    @Tenant() clientId?: string,
   ) {
     return this.servicesService.findAll(clientId, paginationDto, search, status);
   }
@@ -71,7 +71,7 @@ export class ServicesController {
   @ApiResponse({ status: 200, description: 'Serviço encontrado' })
   @ApiResponse({ status: 404, description: 'Serviço não encontrado' })
   findOne(@Param('id') id: string, @Tenant() clientId: string) {
-    return this.servicesService.findOne(id, clientId);
+    return this.servicesService.findOne(clientId, id);
   }
 
   @Patch(':id')
@@ -86,7 +86,7 @@ export class ServicesController {
     @Body() updateServiceDto: UpdateServiceDto,
     @Tenant() clientId: string,
   ) {
-    return this.servicesService.update(id, updateServiceDto, clientId);
+    return this.servicesService.update(clientId, id, updateServiceDto);
   }
 
   @Delete(':id')
@@ -96,7 +96,7 @@ export class ServicesController {
   @ApiResponse({ status: 404, description: 'Serviço não encontrado' })
   @ApiResponse({ status: 400, description: 'Serviço possui agendamentos futuros' })
   remove(@Param('id') id: string, @Tenant() clientId: string) {
-    return this.servicesService.remove(id, clientId);
+    return this.servicesService.remove(clientId, id);
   }
 
   @Patch(':id/status')
@@ -109,6 +109,6 @@ export class ServicesController {
     @Body('isActive') isActive: boolean,
     @Tenant() clientId: string,
   ) {
-    return this.servicesService.updateStatus(id, isActive, clientId);
+    return this.servicesService.updateStatus(clientId, id, isActive);
   }
 }

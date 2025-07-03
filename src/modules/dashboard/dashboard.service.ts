@@ -9,6 +9,8 @@ export class DashboardService {
    * Obter estatísticas completas do dashboard BemMeCare
    */
   async getStats(clientId: string) {
+    console.log(`🔍 [DashboardService] Iniciando getStats para clientId: ${clientId}`);
+
     // Métricas principais
     const [
       totalSalesAmount,
@@ -34,7 +36,26 @@ export class DashboardService {
       this.getMonthlyAppointmentsRevenue(clientId),
     ]);
 
-    return {
+    // Log detalhado dos dados obtidos
+    console.log(`📊 [DashboardService] Dados coletados para clientId ${clientId}:`);
+    console.log(`  • totalSalesAmount: ${totalSalesAmount}`);
+    console.log(`  • totalProductsSold: ${totalProductsSold}`);
+    console.log(`  • totalProducts: ${totalProducts}`);
+    console.log(`  • consultationsToday: ${consultationsToday}`);
+    console.log(`  • consultationsThisMonth: ${consultationsThisMonth}`);
+    console.log(`  • monthlyRevenue: ${monthlyRevenue}`);
+    console.log(`  • websiteVisits: ${websiteVisits}`);
+    console.log(`  • topSellingProducts: ${JSON.stringify(topSellingProducts, null, 2)}`);
+    console.log(`  • todayAppointments: ${JSON.stringify(todayAppointments, null, 2)}`);
+    console.log(`  • monthlyAppointmentsRevenue: ${monthlyAppointmentsRevenue}`);
+
+    const lowStockProducts = await this.getLowStockProducts(clientId);
+    const pendingOrders = await this.getPendingOrders(clientId);
+
+    console.log(`  • lowStockProducts: ${lowStockProducts}`);
+    console.log(`  • pendingOrders: ${pendingOrders}`);
+
+    const result = {
       mainMetrics: {
         websiteVisits,
         totalSalesAmount,
@@ -42,18 +63,26 @@ export class DashboardService {
         monthlyRevenue,
       },
       topSellingProducts,
-      consultations: {
-        today: consultationsToday,
-        thisMonth: consultationsThisMonth,
-        todayAppointments,
-        monthlyRevenue: monthlyAppointmentsRevenue,
+      today: {
+        count: consultationsToday,
+        revenue: await this.getTodayAppointmentsRevenue(clientId),
       },
+      month: {
+        count: consultationsThisMonth,
+        revenue: monthlyAppointmentsRevenue,
+      },
+      todayAppointments,
       overview: {
         totalProducts,
-        lowStockProducts: await this.getLowStockProducts(clientId),
-        pendingOrders: await this.getPendingOrders(clientId),
+        lowStockProducts,
+        pendingOrders,
       },
     };
+
+    console.log(`✅ [DashboardService] Resultado final para clientId ${clientId}:`);
+    console.log(JSON.stringify(result, null, 2));
+
+    return result;
   }
 
   /**
@@ -100,7 +129,7 @@ export class DashboardService {
   }
 
   /**
-   * Consultas de hoje
+   * Consultas hoje
    */
   private async getConsultationsToday(clientId: string): Promise<number> {
     const today = new Date();
@@ -183,7 +212,7 @@ export class DashboardService {
       },
       _sum: {
         quantity: true,
-        totalPrice: true,
+        subtotal: true,
       },
       orderBy: {
         _sum: {
@@ -217,7 +246,7 @@ export class DashboardService {
         description: product?.description || '',
         price: Number(product?.price) || 0,
         quantitySold: item._sum.quantity || 0,
-        totalRevenue: Number(item._sum.totalPrice) || 0,
+        totalRevenue: Number(item._sum.subtotal) || 0,
       };
     });
   }
@@ -264,6 +293,39 @@ export class DashboardService {
   }
 
   /**
+   * Receita dos agendamentos de hoje
+   */
+  private async getTodayAppointmentsRevenue(clientId: string): Promise<number> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        clientId,
+        startTime: {
+          gte: today,
+          lt: tomorrow,
+        },
+        status: 'COMPLETED',
+      },
+      select: {
+        id: true,
+        service: {
+          select: {
+            price: true,
+          },
+        },
+      },
+    });
+
+    return appointments.reduce((total, appointment) => {
+      return total + (Number(appointment.service?.price) || 0);
+    }, 0);
+  }
+
+  /**
    * Receita mensal dos agendamentos
    */
   private async getMonthlyAppointmentsRevenue(clientId: string): Promise<number> {
@@ -279,7 +341,8 @@ export class DashboardService {
         },
         status: 'COMPLETED',
       },
-      include: {
+      select: {
+        id: true,
         service: {
           select: {
             price: true,

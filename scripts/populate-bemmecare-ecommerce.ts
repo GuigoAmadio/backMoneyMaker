@@ -3,144 +3,66 @@ import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-async function createBemMeCare() {
-  console.log('🛍️ Criando BemMeCare - Sistema de Vendas e Gestão Pessoal...\n');
+async function populateBemMeCareEcommerce() {
+  console.log('🛍️ Populando BemMeCare - Sistema de Vendas e Gestão Pessoal...\n');
 
   try {
     // Verificar se já existe pelo slug
-    let bemMeCareClient = await prisma.client.findUnique({
+    const bemMeCareClient = await prisma.client.findUnique({
       where: { slug: 'bemmecare' },
     });
 
-    let clientId: string;
-
-    if (bemMeCareClient) {
-      console.log('⚠️  BemMeCare já existe no sistema!');
-      console.log(`   🆔 ID existente: ${bemMeCareClient.id}`);
-      console.log('🔍 Atualizando configurações...\n');
-      clientId = bemMeCareClient.id;
-
-      // Atualizar configurações do cliente para ecommerce + gestão pessoal
-      await prisma.client.update({
-        where: { id: clientId },
-        data: {
-          settings: JSON.stringify({
-            type: 'ecommerce_personal',
-            theme: 'purple',
-            features: [
-              'ecommerce',
-              'products',
-              'orders',
-              'customers',
-              'appointments',
-              'dashboard',
-              'analytics',
-            ],
-            businessType: 'Vendas Online + Gestão Pessoal',
-            workingHours: {
-              monday: '09:00-18:00',
-              tuesday: '09:00-18:00',
-              wednesday: '09:00-18:00',
-              thursday: '09:00-18:00',
-              friday: '09:00-18:00',
-              saturday: '09:00-14:00',
-              sunday: 'closed',
-            },
-          }),
-        },
-      });
-    } else {
-      // Criar cliente BemMeCare
-      bemMeCareClient = await prisma.client.create({
-        data: {
-          id: 'clnt_bemmecare',
-          name: 'BemMeCare',
-          slug: 'bemmecare',
-          email: 'contato@bemmecare.com',
-          phone: '(11) 3333-4444',
-          website: 'https://bemmecare.com',
-          status: 'ACTIVE',
-          plan: 'premium',
-          settings: JSON.stringify({
-            type: 'ecommerce_personal',
-            theme: 'purple',
-            features: [
-              'ecommerce',
-              'products',
-              'orders',
-              'customers',
-              'appointments',
-              'dashboard',
-              'analytics',
-            ],
-            businessType: 'Vendas Online + Gestão Pessoal',
-            workingHours: {
-              monday: '09:00-18:00',
-              tuesday: '09:00-18:00',
-              wednesday: '09:00-18:00',
-              thursday: '09:00-18:00',
-              friday: '09:00-18:00',
-              saturday: '09:00-14:00',
-              sunday: 'closed',
-            },
-          }),
-        },
-      });
-
-      console.log('✅ Cliente BemMeCare criado com sucesso!');
-      clientId = bemMeCareClient.id;
+    if (!bemMeCareClient) {
+      console.error('❌ Cliente BemMeCare não encontrado! Execute create-bemmecare.ts primeiro.');
+      return;
     }
 
-    // Verificar se usuário admin já existe
-    const existingUser = await prisma.user.findUnique({
-      where: {
-        clientId_email: {
-          clientId: clientId,
-          email: 'admin@bemmecare.com',
-        },
+    const clientId = bemMeCareClient.id;
+    console.log(`✅ Cliente BemMeCare encontrado: ${clientId}\n`);
+
+    // Atualizar configurações do cliente para ecommerce + gestão pessoal
+    await prisma.client.update({
+      where: { id: clientId },
+      data: {
+        settings: JSON.stringify({
+          type: 'ecommerce_personal',
+          theme: 'purple',
+          features: [
+            'ecommerce',
+            'products',
+            'orders',
+            'customers',
+            'appointments',
+            'dashboard',
+            'analytics',
+          ],
+          businessType: 'Vendas Online + Gestão Pessoal',
+          workingHours: {
+            monday: '09:00-18:00',
+            tuesday: '09:00-18:00',
+            wednesday: '09:00-18:00',
+            thursday: '09:00-18:00',
+            friday: '09:00-18:00',
+            saturday: '09:00-14:00',
+            sunday: 'closed',
+          },
+        }),
       },
     });
 
-    if (existingUser) {
-      console.log('⚠️  Usuário admin@bemmecare.com já existe!');
-      console.log('🔄 Atualizando senha para admin123...\n');
-
-      const hashedPassword = await bcrypt.hash('admin123', 12);
-      await prisma.user.update({
-        where: {
-          clientId_email: {
-            clientId: clientId,
-            email: 'admin@bemmecare.com',
-          },
-        },
-        data: { password: hashedPassword },
-      });
-
-      console.log('✅ Senha atualizada com sucesso!');
-    } else {
-      // Criar usuário admin
-      const hashedPassword = await bcrypt.hash('admin123', 12);
-
-      await prisma.user.create({
-        data: {
-          name: 'Admin BemMeCare',
-          email: 'admin@bemmecare.com',
-          password: hashedPassword,
-          role: 'ADMIN',
-          status: 'ACTIVE',
-          clientId: clientId,
-          emailVerified: true,
-          emailVerifiedAt: new Date(),
-        },
-      });
-
-      console.log('✅ Usuário admin criado com sucesso!');
-    }
-
-    // Limpar funcionários antigos (médicos) se existirem
-    await prisma.employee.deleteMany({
-      where: { clientId: clientId },
-    });
+    // Limpar dados antigos se necessário
+    console.log('🧹 Limpando dados antigos...');
+    await prisma.ecommerceOrderItem.deleteMany({ where: { order: { clientId } } });
+    await prisma.ecommerceOrder.deleteMany({ where: { clientId } });
+    await prisma.address.deleteMany({ where: { customer: { clientId } } });
+    await prisma.customer.deleteMany({ where: { clientId } });
+    await prisma.appointment.deleteMany({ where: { clientId } });
+    await prisma.orderItem.deleteMany({ where: { order: { clientId } } });
+    await prisma.order.deleteMany({ where: { clientId } });
+    await prisma.product.deleteMany({ where: { clientId } });
+    await prisma.service.deleteMany({ where: { clientId } });
+    await prisma.category.deleteMany({ where: { clientId } });
+    await prisma.employee.deleteMany({ where: { clientId } });
 
     // Criar funcionários para ecommerce/gestão
     console.log('👥 Criando equipe...');
@@ -165,8 +87,9 @@ async function createBemMeCare() {
       },
     ];
 
+    const employees: any[] = [];
     for (const func of funcionarios) {
-      await prisma.employee.create({
+      const employee = await prisma.employee.create({
         data: {
           clientId: clientId,
           ...func,
@@ -180,6 +103,7 @@ async function createBemMeCare() {
           },
         },
       });
+      employees.push(employee);
     }
 
     // Criar categorias de produtos
@@ -319,32 +243,53 @@ async function createBemMeCare() {
     const services = await Promise.all([
       prisma.service.create({
         data: {
+          clientId,
           categoryId: categories[3].id,
           name: 'Consultoria Pessoal',
           description: 'Sessão de consultoria e organização pessoal',
           duration: 60,
           price: 150.0,
+          maxAdvanceBooking: 30,
+          minAdvanceBooking: 1,
         },
       }),
       prisma.service.create({
         data: {
+          clientId,
           categoryId: categories[3].id,
           name: 'Reunião de Planejamento',
           description: 'Reunião para planejamento de projetos pessoais',
           duration: 90,
           price: 200.0,
+          maxAdvanceBooking: 15,
+          minAdvanceBooking: 2,
         },
       }),
       prisma.service.create({
         data: {
+          clientId,
           categoryId: categories[3].id,
           name: 'Sessão de Mentoria',
           description: 'Mentoria individual para desenvolvimento pessoal',
           duration: 45,
           price: 120.0,
+          maxAdvanceBooking: 21,
+          minAdvanceBooking: 1,
         },
       }),
     ]);
+
+    // Associar funcionários aos serviços
+    for (const service of services) {
+      await prisma.service.update({
+        where: { id: service.id },
+        data: {
+          employees: {
+            connect: employees.map((emp) => ({ id: emp.id })),
+          },
+        },
+      });
+    }
 
     // Criar clientes do ecommerce
     console.log('👥 Criando clientes do ecommerce...');
@@ -436,6 +381,8 @@ async function createBemMeCare() {
         quantity: 1,
         unitPrice: 1299.99,
         totalPrice: 1299.99,
+        productName: products[0].name,
+        productSku: products[0].sku,
       },
     });
 
@@ -446,6 +393,8 @@ async function createBemMeCare() {
         quantity: 1,
         unitPrice: 199.9,
         totalPrice: 199.9,
+        productName: products[1].name,
+        productSku: products[1].sku,
       },
     });
 
@@ -464,37 +413,39 @@ async function createBemMeCare() {
       where: { clientId, role: 'ADMIN' },
     });
 
-    const firstEmployee = await prisma.employee.findFirst({
-      where: { clientId },
-    });
-
-    if (adminUser && firstEmployee) {
+    if (adminUser && employees.length > 0) {
       await prisma.appointment.create({
         data: {
+          clientId,
           userId: adminUser.id,
-          employeeId: firstEmployee.id,
+          employeeId: employees[0].id,
           serviceId: services[0].id,
           startTime: tomorrow,
           endTime: new Date(tomorrow.getTime() + 60 * 60 * 1000),
           status: 'SCHEDULED',
           description: 'Consultoria sobre organização de rotina',
+          price: 150.0,
+          paymentStatus: 'PENDING',
         },
       });
 
       await prisma.appointment.create({
         data: {
+          clientId,
           userId: adminUser.id,
-          employeeId: firstEmployee.id,
+          employeeId: employees[0].id,
           serviceId: services[1].id,
           startTime: nextWeek,
           endTime: new Date(nextWeek.getTime() + 90 * 60 * 1000),
           status: 'CONFIRMED',
           description: 'Planejamento de metas para 2024',
+          price: 200.0,
+          paymentStatus: 'PAID',
         },
       });
     }
 
-    console.log('\n🎉 BEMMECARE ECOMMERCE + GESTÃO PESSOAL CONFIGURADO!');
+    console.log('\n🎉 BEMMECARE ECOMMERCE + GESTÃO PESSOAL POPULADO!');
     console.log('='.repeat(60));
     console.log('🔐 CREDENCIAIS DE ACESSO:');
     console.log('   📧 Email: admin@bemmecare.com');
@@ -508,14 +459,15 @@ async function createBemMeCare() {
     console.log(`   🛍️ ${products.length} produtos`);
     console.log(`   📅 ${services.length} serviços de agenda`);
     console.log(`   👤 ${customers.length} clientes do ecommerce`);
+    console.log(`   🏠 ${customers.length} endereços`);
     console.log(`   📦 1 pedido de exemplo`);
     console.log(`   📅 2 agendamentos de exemplo`);
     console.log('='.repeat(60));
   } catch (error) {
-    console.error('❌ Erro ao criar BemMeCare:', error);
+    console.error('❌ Erro ao popular BemMeCare:', error);
   }
 }
 
-createBemMeCare()
+populateBemMeCareEcommerce()
   .catch(console.error)
   .finally(() => prisma.$disconnect());
