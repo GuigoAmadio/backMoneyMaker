@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { CartService } from './cart.service';
 import { CartController } from './cart.controller';
+import { CartService } from './cart.service';
 import { DatabaseModule } from '../../../database/database.module';
-import { TenantModule } from '../../../common/tenant/tenant.module';
+import { CacheModule } from '../../../common/cache/cache.module';
 
 @Module({
-  imports: [DatabaseModule, TenantModule],
+  imports: [DatabaseModule, CacheModule],
   controllers: [CartController],
   providers: [CartService],
   exports: [CartService],

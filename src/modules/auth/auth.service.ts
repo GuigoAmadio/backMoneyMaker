@@ -66,6 +66,9 @@ export class AuthService {
       throw new UnauthorizedException('Conta temporariamente bloqueada');
     }
 
+    console.log('[AUTH] Senha recebida:', password);
+    console.log('[AUTH] Senha no banco:', user.password);
+
     // Verificar senha
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
@@ -124,7 +127,29 @@ export class AuthService {
     });
 
     const { password: _, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+
+    // Gerar tokens após registro bem-sucedido
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      clientId: user.clientId,
+    };
+
+    const accessToken = this.jwtService.sign(payload);
+    const refreshToken = await this.generateRefreshToken(user.id);
+
+    return {
+      success: true,
+      message: 'Usuário registrado com sucesso',
+      data: {
+        token: accessToken,
+        client_id: user.clientId,
+        user: userWithoutPassword,
+        refresh_token: refreshToken,
+        expires_in: this.configService.get('JWT_EXPIRATION'),
+      },
+    };
   }
 
   /**
@@ -225,6 +250,8 @@ export class AuthService {
    * Obter perfil do usuário autenticado
    */
   async getProfile(user: any) {
+    // LOG para debug
+    console.log('[getProfile] Usuário recebido:', user);
     // O user já vem da estratégia JWT com todos os dados necessários
     // Apenas remover a senha se estiver presente e retornar
     const { password: _, ...userWithoutPassword } = user;

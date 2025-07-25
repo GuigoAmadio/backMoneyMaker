@@ -3,15 +3,22 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { CacheService } from '../../common/cache/cache.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto';
 
 @Injectable()
 export class EmployeesService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(EmployeesService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private cacheService: CacheService,
+  ) {}
 
   async create(createEmployeeDto: CreateEmployeeDto, clientId: string) {
     // Verificar se o email já está em uso neste cliente
@@ -62,7 +69,8 @@ export class EmployeesService {
     status?: string,
   ): Promise<PaginatedResult<any>> {
     const { page = 1, limit = 10 } = paginationDto;
-    const skip = (page - 1) * limit;
+    const skip = Number(page) && Number(limit) ? (Number(page) - 1) * Number(limit) : 0;
+    const take = Number(limit) || 10;
 
     const where: any = { clientId };
 
@@ -82,7 +90,7 @@ export class EmployeesService {
       this.prisma.employee.findMany({
         where,
         skip,
-        take: limit,
+        take,
         orderBy: { createdAt: 'desc' },
         include: {
           services: {
@@ -265,5 +273,102 @@ export class EmployeesService {
       message: `Funcionário ${isActive ? 'ativado' : 'desativado'} com sucesso`,
       data: updatedEmployee,
     };
+  }
+
+  async getServicesByEmployee(employeeId: string, clientId: string) {
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: employeeId, clientId },
+      include: {
+        services: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            duration: true,
+            price: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+    if (!employee) {
+      return { success: false, message: 'Funcionário não encontrado', services: [] };
+    }
+    return { success: true, services: employee.services };
+  }
+
+  /**
+   * Obter estatísticas de funcionários
+   */
+  async getEmployeeStats(clientId: string) {
+    this.logger.log(`Obtendo estatísticas de funcionários para clientId: ${clientId}`);
+
+    try {
+      // Tentar obter do cache primeiro
+      const cacheKey = `employees:stats:${clientId}`;
+      const cachedStats = await this.cacheService.get(cacheKey);
+
+      if (cachedStats) {
+        this.logger.debug(
+          `Estatísticas de funcionários obtidas do cache para clientId: ${clientId}`,
+        );
+        return cachedStats;
+      }
+
+      this.logger.log(`Cache miss - coletando estatísticas do banco para clientId: ${clientId}`);
+
+      const [totalEmployees, activeEmployees, inactiveEmployees, employeesByPosition, recentHires] =
+        await Promise.all([
+          this.prisma.employee.count({ where: { clientId } }),
+          this.prisma.employee.count({ where: { clientId, isActive: true } }),
+          this.prisma.employee.count({ where: { clientId, isActive: false } }),
+          this.prisma.employee.groupBy({
+            by: ['position'],
+            where: { clientId },
+            _count: { position: true },
+          }),
+          this.prisma.employee.count({
+            where: {
+              clientId,
+              createdAt: {
+                gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Últimos 30 dias
+              },
+            },
+          }),
+        ]);
+
+      this.logger.log(`Estatísticas calculadas para clientId: ${clientId}`);
+
+      const result = {
+        success: true,
+        data: {
+          totalEmployees,
+          activeEmployees,
+          inactiveEmployees,
+          employeesByPosition: employeesByPosition.map((item) => ({
+            position: item.position,
+            count: item._count.position,
+          })),
+          recentHires,
+        },
+      };
+
+      // Salvar no cache por 10 minutos
+      await this.cacheService.set(cacheKey, result, clientId, {
+        ttl: 600,
+        tags: ['employees', 'stats'],
+      });
+
+      this.logger.log(
+        `Estatísticas de funcionários coletadas e cacheadas com sucesso para clientId: ${clientId}`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Erro ao obter estatísticas de funcionários para clientId: ${clientId}`,
+        error,
+      );
+      throw error;
+    }
   }
 }

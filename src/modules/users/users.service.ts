@@ -61,16 +61,18 @@ export class UsersService {
 
     const whereClause = this.tenantService.applyTenantFilter(clientId);
 
+    const findManyArgs: any = {
+      where: whereClause,
+      select: this.getUserSelectFields(),
+      orderBy: {
+        [orderBy || 'createdAt']: orderDirection,
+      },
+    };
+    if (typeof skip === 'number' && !isNaN(skip)) findManyArgs.skip = skip;
+    if (typeof limit === 'number' && !isNaN(limit)) findManyArgs.take = limit;
+
     const [users, total] = await Promise.all([
-      this.prisma.user.findMany({
-        where: whereClause,
-        select: this.getUserSelectFields(),
-        skip,
-        take: limit,
-        orderBy: {
-          [orderBy || 'createdAt']: orderDirection,
-        },
-      }),
+      this.prisma.user.findMany(findManyArgs),
       this.prisma.user.count({ where: whereClause }),
     ]);
 
@@ -216,6 +218,51 @@ export class UsersService {
           slug: true,
         },
       },
+    };
+  }
+
+  /**
+   * Obter estatísticas do dashboard
+   */
+  async getDashboardStats(clientId: string) {
+    const whereClause = this.tenantService.applyTenantFilter(clientId);
+
+    const [totalUsers, activeUsers, newUsersThisMonth, usersByRole] = await Promise.all([
+      this.prisma.user.count({ where: whereClause }),
+      this.prisma.user.count({
+        where: {
+          ...whereClause,
+          status: 'ACTIVE',
+        },
+      }),
+      this.prisma.user.count({
+        where: {
+          ...whereClause,
+          createdAt: {
+            gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+          },
+        },
+      }),
+      this.prisma.user.groupBy({
+        by: ['role'],
+        where: whereClause,
+        _count: {
+          role: true,
+        },
+      }),
+    ]);
+
+    return {
+      totalUsers,
+      activeUsers,
+      newUsersThisMonth,
+      usersByRole: usersByRole.reduce(
+        (acc, item) => {
+          acc[item.role] = item._count.role;
+          return acc;
+        },
+        {} as Record<string, number>,
+      ),
     };
   }
 }

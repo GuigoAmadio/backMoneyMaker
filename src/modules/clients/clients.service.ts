@@ -167,4 +167,42 @@ export class ClientsService {
 
     return client;
   }
+
+  /**
+   * Buscar todos os usuários (clientes) que já tiveram appointment com um employee
+   */
+  async findClientsByEmployee(employeeId: string) {
+    // Buscar todos os userIds distintos que têm appointment com esse employee
+    const appointments = await this.prisma.appointment.findMany({
+      where: { employeeId },
+      select: { userId: true },
+      distinct: ['userId'],
+    });
+
+    const userIds = appointments.map((a) => a.userId);
+
+    if (userIds.length === 0) {
+      return {
+        data: [],
+        meta: { total: 0, page: 1, limit: 100, totalPages: 1, hasNext: false, hasPrevious: false },
+      };
+    }
+
+    // Buscar os usuários correspondentes
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+    });
+
+    return {
+      data: users,
+      meta: {
+        total: users.length,
+        page: 1,
+        limit: 100,
+        totalPages: 1,
+        hasNext: false,
+        hasPrevious: false,
+      },
+    };
+  }
 }

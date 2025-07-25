@@ -54,6 +54,11 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   }
 
   handleRequest(err: any, user: any, info: any) {
+    // LOGS DETALHADOS PARA DEBUG
+    console.log('--- JwtAuthGuard.handleRequest ---');
+    console.log('Erro:', err);
+    console.log('Usuário decodificado:', user);
+    console.log('Info do Passport:', info);
     if (err || !user) {
       throw err || new UnauthorizedException('Token inválido ou expirado');
     }

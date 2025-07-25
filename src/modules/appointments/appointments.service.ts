@@ -1,10 +1,18 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { AppointmentStatus } from '@prisma/client';
+import { cleanData } from '../../common/utils/data-cleaner.util';
+import { CreateAppointmentDto } from './dto/create-appointment.dto';
+import { CacheService } from '../../common/cache/cache.service';
 
 @Injectable()
 export class AppointmentsService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(AppointmentsService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private cacheService: CacheService,
+  ) {}
 
   /**
    * Obter agendamentos para o calendário
@@ -15,162 +23,299 @@ export class AppointmentsService {
     endDate?: string,
     categoryId?: string,
   ) {
-    const where: any = {
-      clientId, // Filtrar por cliente
-    };
+    this.logger.log(
+      `Obtendo agendamentos do calendário para clientId: ${clientId}, startDate: ${startDate}, endDate: ${endDate}, categoryId: ${categoryId}`,
+    );
 
-    if (startDate || endDate) {
-      where.startTime = {};
-      if (startDate) where.startTime.gte = new Date(startDate);
-      if (endDate) where.startTime.lte = new Date(endDate);
-    }
-
-    if (categoryId) {
-      where.service = {
-        categoryId,
+    try {
+      const where: any = {
+        clientId, // Filtrar por cliente
       };
-    }
 
-    const appointments = await this.prisma.appointment.findMany({
-      where,
-      include: {
-        service: true,
-        user: true,
-        employee: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+      if (startDate || endDate) {
+        where.startTime = {};
+        if (startDate) where.startTime.gte = new Date(startDate);
+        if (endDate) where.startTime.lte = new Date(endDate);
+      }
+
+      if (categoryId) {
+        where.service = {
+          categoryId,
+        };
+      }
+
+      this.logger.debug(`Filtros aplicados: ${JSON.stringify(where)}`);
+
+      const appointments = await this.prisma.appointment.findMany({
+        where,
+        include: {
+          service: true,
+          user: true,
+          employee: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
         },
-      },
-      orderBy: {
-        startTime: 'asc',
-      },
-    });
+        orderBy: {
+          startTime: 'asc',
+        },
+      });
 
-    return {
-      success: true,
-      data: appointments.map((appointment) => ({
-        id: appointment.id,
-        startTime: appointment.startTime,
-        endTime: appointment.endTime,
-        status: appointment.status,
-        service: {
-          name: appointment.service?.name,
-          price: Number(appointment.service?.price) || 0,
-        },
-        user: {
-          name: appointment.user?.name,
-          email: appointment.user?.email,
-        },
-        employee: {
-          name: appointment.employee?.name,
-          email: appointment.employee?.email,
-        },
-      })),
-    };
+      this.logger.log(`Encontrados ${appointments.length} agendamentos para clientId: ${clientId}`);
+
+      const result = {
+        success: true,
+        data: appointments.map((appointment) => ({
+          id: appointment.id,
+          startTime: appointment.startTime,
+          endTime: appointment.endTime,
+          status: appointment.status,
+          service: {
+            name: appointment.service?.name,
+            price: Number(appointment.service?.price) || 0,
+          },
+          user: {
+            name: appointment.user?.name,
+            email: appointment.user?.email,
+          },
+          employee: {
+            name: appointment.employee?.name,
+            email: appointment.employee?.email,
+          },
+        })),
+      };
+
+      this.logger.log(
+        `Agendamentos do calendário retornados com sucesso para clientId: ${clientId}`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Erro ao obter agendamentos do calendário para clientId: ${clientId}`,
+        error,
+      );
+      throw error;
+    }
   }
 
   /**
    * Obter agendamentos da semana
    */
   async getWeekAppointments(clientId: string, dateString?: string) {
-    const referenceDate = dateString ? new Date(dateString) : new Date();
-
-    // Encontrar o início da semana (segunda-feira)
-    const startOfWeek = new Date(referenceDate);
-    const dayOfWeek = startOfWeek.getDay();
-    const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-    startOfWeek.setDate(diff);
-    startOfWeek.setHours(0, 0, 0, 0);
-
-    // Encontrar o fim da semana (domingo)
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    endOfWeek.setHours(23, 59, 59, 999);
-
-    return await this.getCalendarAppointments(
-      clientId,
-      startOfWeek.toISOString().split('T')[0],
-      endOfWeek.toISOString().split('T')[0],
+    this.logger.log(
+      `Obtendo agendamentos da semana para clientId: ${clientId}, dateString: ${dateString}`,
     );
+
+    try {
+      const referenceDate = dateString ? new Date(dateString) : new Date();
+
+      // Encontrar o início da semana (segunda-feira)
+      const startOfWeek = new Date(referenceDate);
+      const dayOfWeek = startOfWeek.getDay();
+      const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+      startOfWeek.setDate(diff);
+      startOfWeek.setHours(0, 0, 0, 0);
+
+      // Encontrar o fim da semana (domingo)
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+
+      this.logger.debug(
+        `Período da semana: ${startOfWeek.toISOString()} até ${endOfWeek.toISOString()}`,
+      );
+
+      const result = await this.getCalendarAppointments(
+        clientId,
+        startOfWeek.toISOString().split('T')[0],
+        endOfWeek.toISOString().split('T')[0],
+      );
+
+      this.logger.log(`Agendamentos da semana obtidos com sucesso para clientId: ${clientId}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Erro ao obter agendamentos da semana para clientId: ${clientId}`, error);
+      throw error;
+    }
   }
 
   /**
    * Obter agendamentos de hoje
    */
   async getTodayAppointments(clientId: string) {
-    const today = new Date();
-    const todayString = today.toISOString().split('T')[0];
+    this.logger.log(`Obtendo agendamentos de hoje para clientId: ${clientId}`);
 
-    const result = await this.getCalendarAppointments(clientId, todayString, todayString);
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-    return {
-      success: true,
-      data: {
-        appointments: result.data,
-        totalToday: result.data?.length || 0,
-        revenue: result.data?.reduce((sum, apt) => sum + (apt.service?.price || 0), 0) || 0,
-      },
-    };
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+
+      this.logger.debug(`Período de hoje: ${today.toISOString()} até ${tomorrow.toISOString()}`);
+
+      const appointments = await this.prisma.appointment.findMany({
+        where: {
+          clientId,
+          startTime: {
+            gte: today,
+            lt: tomorrow,
+          },
+        },
+        include: {
+          service: true,
+          user: true,
+          employee: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+        orderBy: {
+          startTime: 'asc',
+        },
+      });
+
+      this.logger.log(
+        `Encontrados ${appointments.length} agendamentos de hoje para clientId: ${clientId}`,
+      );
+
+      const result = {
+        success: true,
+        data: appointments.map((appointment) => ({
+          id: appointment.id,
+          startTime: appointment.startTime,
+          endTime: appointment.endTime,
+          status: appointment.status,
+          service: {
+            name: appointment.service?.name,
+            price: Number(appointment.service?.price) || 0,
+          },
+          user: {
+            name: appointment.user?.name,
+            email: appointment.user?.email,
+          },
+          employee: {
+            name: appointment.employee?.name,
+            email: appointment.employee?.email,
+          },
+        })),
+      };
+
+      this.logger.log(`Agendamentos de hoje retornados com sucesso para clientId: ${clientId}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Erro ao obter agendamentos de hoje para clientId: ${clientId}`, error);
+      throw error;
+    }
   }
 
   /**
    * Obter estatísticas de agendamentos
    */
   async getAppointmentStats(clientId: string) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    this.logger.log(`Obtendo estatísticas de agendamentos para clientId: ${clientId}`);
 
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-    const [todayCount, monthCount, todayRevenue, monthRevenue, totalCompleted, averageDuration] =
-      await Promise.all([
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+
+      this.logger.debug(
+        `Período do mês: ${startOfMonth.toISOString()} até ${endOfMonth.toISOString()}`,
+      );
+
+      const [
+        totalAppointments,
+        todayAppointments,
+        monthAppointments,
+        completedAppointments,
+        cancelledAppointments,
+        pendingAppointments,
+        totalRevenue,
+        monthlyRevenue,
+        averageDuration,
+      ] = await Promise.all([
+        this.prisma.appointment.count({ where: { clientId } }),
         this.prisma.appointment.count({
           where: {
             clientId,
-            startTime: { gte: today, lt: tomorrow },
+            startTime: {
+              gte: today,
+            },
           },
         }),
         this.prisma.appointment.count({
           where: {
             clientId,
-            startTime: { gte: startOfMonth },
+            startTime: {
+              gte: startOfMonth,
+              lte: endOfMonth,
+            },
           },
         }),
-        this.calculateRevenue(clientId, today, tomorrow),
-        this.calculateRevenue(clientId, startOfMonth, new Date()),
         this.prisma.appointment.count({
           where: {
             clientId,
             status: 'COMPLETED',
           },
         }),
+        this.prisma.appointment.count({
+          where: {
+            clientId,
+            status: 'CANCELLED',
+          },
+        }),
+        this.prisma.appointment.count({
+          where: {
+            clientId,
+            status: 'SCHEDULED',
+          },
+        }),
+        this.calculateRevenue(clientId, new Date(0), new Date()),
+        this.calculateRevenue(clientId, startOfMonth, endOfMonth),
         this.calculateAverageDuration(clientId),
       ]);
 
-    return {
-      success: true,
-      data: {
-        today: {
-          count: todayCount,
-          revenue: todayRevenue,
-        },
-        month: {
-          count: monthCount,
-          revenue: monthRevenue,
-        },
-        overall: {
-          totalCompleted,
+      this.logger.log(`Estatísticas calculadas para clientId: ${clientId}`);
+
+      const result = {
+        success: true,
+        data: {
+          totalAppointments,
+          todayAppointments,
+          monthAppointments,
+          statusBreakdown: {
+            completed: completedAppointments,
+            cancelled: cancelledAppointments,
+            pending: pendingAppointments,
+          },
+          revenue: {
+            total: totalRevenue,
+            monthly: monthlyRevenue,
+          },
           averageDuration,
         },
-      },
-    };
+      };
+
+      this.logger.log(
+        `Estatísticas de agendamentos retornadas com sucesso para clientId: ${clientId}`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Erro ao obter estatísticas de agendamentos para clientId: ${clientId}`,
+        error,
+      );
+      throw error;
+    }
   }
 
   /**
@@ -271,7 +416,7 @@ export class AppointmentsService {
    */
   async findAll(clientId: string, paginationDto: any, filters: any) {
     const { page = 1, limit = 10 } = paginationDto;
-    const { status, serviceId, startDate, endDate, employeeId } = filters;
+    const { status, serviceId, startDate, endDate, employeeId, userId } = filters;
 
     const where: any = {
       clientId, // Filtrar por cliente
@@ -280,6 +425,7 @@ export class AppointmentsService {
     if (status) where.status = status;
     if (serviceId) where.serviceId = serviceId;
     if (employeeId) where.employeeId = employeeId;
+    if (userId) where.userId = userId;
     if (startDate || endDate) {
       where.startTime = {};
       if (startDate) where.startTime.gte = new Date(startDate);
@@ -398,41 +544,65 @@ export class AppointmentsService {
   /**
    * Criar agendamento
    */
-  async create(data: any) {
-    const appointment = await this.prisma.appointment.create({
-      data,
-      include: {
-        service: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            duration: true,
-            price: true,
-          },
-        },
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-      },
-    });
+  async create(data: CreateAppointmentDto) {
+    this.logger.log(
+      `Criando agendamento para clientId: ${data.clientId}, userId: ${data.userId}, serviceId: ${data.serviceId}`,
+    );
 
-    return {
-      success: true,
-      data: {
-        ...appointment,
-        service: {
-          ...appointment.service,
-          price: Number(appointment.service?.price) || 0,
+    try {
+      this.logger.debug(`Dados recebidos: ${JSON.stringify(data)}`);
+
+      // Verificar conflito de horário
+      const hasConflict = await this.checkTimeConflict(
+        new Date(data.startTime),
+        new Date(data.endTime),
+      );
+
+      if (hasConflict) {
+        this.logger.warn(`Conflito de horário detectado para clientId: ${data.clientId}`);
+        throw new ConflictException('Conflito de horário: já existe um agendamento neste período');
+      }
+
+      const appointment = await this.prisma.appointment.create({
+        data: {
+          startTime: new Date(data.startTime),
+          endTime: new Date(data.endTime),
+          status: data.status || 'SCHEDULED',
+          notes: data.notes,
+          clientId: data.clientId,
+          userId: data.userId,
+          serviceId: data.serviceId,
+          employeeId: data.employeeId,
         },
-      },
-      message: 'Agendamento criado com sucesso',
-    };
+        include: {
+          service: true,
+          user: true,
+          employee: true,
+        },
+      });
+
+      this.logger.log(
+        `Agendamento criado com sucesso: ${appointment.id} para clientId: ${data.clientId}`,
+      );
+
+      const result = {
+        success: true,
+        data: {
+          id: appointment.id,
+          startTime: appointment.startTime,
+          endTime: appointment.endTime,
+          status: appointment.status,
+          notes: appointment.notes,
+        },
+        message: 'Agendamento criado com sucesso',
+      };
+
+      this.logger.log(`Agendamento retornado com sucesso para clientId: ${data.clientId}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Erro ao criar agendamento para clientId: ${data.clientId}`, error);
+      throw error;
+    }
   }
 
   /**
@@ -448,9 +618,11 @@ export class AppointmentsService {
       throw new NotFoundException('Agendamento não encontrado');
     }
 
+    const cleanedData = cleanData(data);
+
     const appointment = await this.prisma.appointment.update({
       where: { id },
-      data,
+      data: cleanedData,
       include: {
         service: {
           select: {

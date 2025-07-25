@@ -25,6 +25,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
+    // LOG para debug
+    console.log('[JwtStrategy] Payload recebido:', payload);
     if (!payload || !payload.sub) {
       throw new UnauthorizedException('Token JWT inválido: campo sub ausente');
     }
@@ -36,6 +38,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         },
       },
     });
+
+    // LOG para debug
 
     if (!user) {
       throw new UnauthorizedException('Usuário não encontrado');
@@ -50,6 +54,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     const { password: _, ...userWithoutPassword } = user;
+    // LOG para debug
     return userWithoutPassword;
   }
 }

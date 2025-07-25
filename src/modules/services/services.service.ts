@@ -3,52 +3,76 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto';
+import { CacheService } from '../../common/cache/cache.service';
 
 @Injectable()
 export class ServicesService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(ServicesService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private cacheService: CacheService,
+  ) {}
 
   async create(clientId: string, createServiceDto: CreateServiceDto) {
-    // Verificar se o nome já está em uso
-    const existingService = await this.prisma.service.findFirst({
-      where: {
-        clientId,
-        name: createServiceDto.name,
-      },
-    });
+    this.logger.log(`Criando serviço para clientId: ${clientId}, nome: ${createServiceDto.name}`);
 
-    if (existingService) {
-      throw new ConflictException('Nome do serviço já está em uso');
+    try {
+      this.logger.debug(`Dados recebidos: ${JSON.stringify(createServiceDto)}`);
+
+      // Verificar se o nome já está em uso
+      const existingService = await this.prisma.service.findFirst({
+        where: {
+          clientId,
+          name: createServiceDto.name,
+        },
+      });
+
+      if (existingService) {
+        this.logger.warn(
+          `Nome de serviço já em uso: ${createServiceDto.name} para clientId: ${clientId}`,
+        );
+        throw new ConflictException('Nome do serviço já está em uso');
+      }
+
+      const service = await this.prisma.service.create({
+        data: {
+          ...createServiceDto,
+          clientId,
+        },
+        include: {
+          employees: {
+            select: { id: true, name: true, email: true, position: true, isActive: true },
+          },
+          appointments: {
+            select: { id: true, startTime: true, endTime: true, status: true },
+            where: { startTime: { gte: new Date() } },
+            orderBy: { startTime: 'asc' },
+            take: 5,
+          },
+        },
+      });
+
+      this.logger.log(`Serviço criado com sucesso: ${service.id} para clientId: ${clientId}`);
+
+      const result = {
+        success: true,
+        message: 'Serviço criado com sucesso',
+        data: service,
+      };
+
+      this.logger.log(`Serviço retornado com sucesso para clientId: ${clientId}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Erro ao criar serviço para clientId: ${clientId}`, error);
+      throw error;
     }
-
-    const service = await this.prisma.service.create({
-      data: {
-        ...createServiceDto,
-        clientId,
-      },
-      include: {
-        employees: {
-          select: { id: true, name: true, email: true, position: true, isActive: true },
-        },
-        appointments: {
-          select: { id: true, startTime: true, endTime: true, status: true },
-          where: { startTime: { gte: new Date() } },
-          orderBy: { startTime: 'asc' },
-          take: 5,
-        },
-      },
-    });
-
-    return {
-      success: true,
-      message: 'Serviço criado com sucesso',
-      data: service,
-    };
   }
 
   async findAll(
@@ -57,38 +81,101 @@ export class ServicesService {
     search?: string,
     status?: string,
   ): Promise<PaginatedResult<any>> {
-    const { page = 1, limit = 10 } = paginationDto;
-    const skip = (page - 1) * limit;
+    this.logger.log(
+      `Listando serviços para clientId: ${clientId}, search: ${search}, status: ${status}`,
+    );
 
-    const where: any = { clientId };
+    try {
+      this.logger.debug(`Pagination: ${JSON.stringify(paginationDto)}`);
 
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-      ];
+      const { page = 1, limit = 10 } = paginationDto;
+      const skip = (page - 1) * limit;
+
+      const where: any = { clientId };
+
+      if (search) {
+        where.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+        ];
+      }
+
+      if (status !== undefined) {
+        where.isActive = status === 'active';
+      }
+
+      this.logger.debug(`Filtros aplicados: ${JSON.stringify(where)}`);
+
+      const [services, total] = await Promise.all([
+        this.prisma.service.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            employees: {
+              select: { id: true, name: true, email: true, position: true, isActive: true },
+              where: { isActive: true },
+            },
+            appointments: {
+              select: { id: true, startTime: true, endTime: true, status: true },
+              where: { startTime: { gte: new Date() } },
+              orderBy: { startTime: 'asc' },
+              take: 3,
+            },
+            _count: {
+              select: {
+                employees: true,
+                appointments: true,
+              },
+            },
+          },
+        }),
+        this.prisma.service.count({ where }),
+      ]);
+
+      this.logger.log(
+        `Encontrados ${services.length} serviços de ${total} total para clientId: ${clientId}`,
+      );
+
+      const result: PaginatedResult<any> = {
+        data: services,
+        meta: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+          hasNext: page < Math.ceil(total / limit),
+          hasPrevious: page > 1,
+        },
+      };
+
+      this.logger.log(`Serviços retornados com sucesso para clientId: ${clientId}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Erro ao listar serviços para clientId: ${clientId}`, error);
+      throw error;
     }
+  }
 
-    if (status !== undefined) {
-      where.isActive = status === 'active';
-    }
+  async findOne(clientId: string, id: string) {
+    this.logger.log(`Buscando serviço ${id} para clientId: ${clientId}`);
 
-    const [services, total] = await Promise.all([
-      this.prisma.service.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
+    try {
+      const service = await this.prisma.service.findFirst({
+        where: {
+          id,
+          clientId,
+        },
         include: {
           employees: {
             select: { id: true, name: true, email: true, position: true, isActive: true },
-            where: { isActive: true },
           },
           appointments: {
             select: { id: true, startTime: true, endTime: true, status: true },
             where: { startTime: { gte: new Date() } },
             orderBy: { startTime: 'asc' },
-            take: 3,
+            take: 10,
           },
           _count: {
             select: {
@@ -97,69 +184,26 @@ export class ServicesService {
             },
           },
         },
-      }),
-      this.prisma.service.count({ where }),
-    ]);
+      });
 
-    const totalPages = Math.ceil(total / limit);
+      if (!service) {
+        this.logger.warn(`Serviço não encontrado: ${id} para clientId: ${clientId}`);
+        throw new NotFoundException('Serviço não encontrado');
+      }
 
-    return {
-      data: services,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages,
-        hasNext: page < totalPages,
-        hasPrevious: page > 1,
-      },
-    };
-  }
+      this.logger.log(`Serviço encontrado: ${id} para clientId: ${clientId}`);
 
-  async findOne(clientId: string, id: string) {
-    const service = await this.prisma.service.findFirst({
-      where: { id, clientId },
-      include: {
-        employees: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            position: true,
-            isActive: true,
-            workingHours: true,
-          },
-        },
-        appointments: {
-          select: {
-            id: true,
-            startTime: true,
-            endTime: true,
-            status: true,
-            employee: { select: { name: true } },
-            user: { select: { name: true, email: true } },
-          },
-          where: { startTime: { gte: new Date() } },
-          orderBy: { startTime: 'asc' },
-          take: 10,
-        },
-        _count: {
-          select: {
-            employees: true,
-            appointments: true,
-          },
-        },
-      },
-    });
+      const result = {
+        success: true,
+        data: service,
+      };
 
-    if (!service) {
-      throw new NotFoundException('Serviço não encontrado');
+      this.logger.log(`Serviço retornado com sucesso para clientId: ${clientId}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Erro ao buscar serviço ${id} para clientId: ${clientId}`, error);
+      throw error;
     }
-
-    return {
-      success: true,
-      data: service,
-    };
   }
 
   async update(clientId: string, id: string, updateServiceDto: UpdateServiceDto) {

@@ -24,7 +24,7 @@ export const Tenant = createParamDecorator((data: unknown, ctx: ExecutionContext
       }
     }
   }
-
+  console.log('clientId', clientId);
   return clientId;
 });
 

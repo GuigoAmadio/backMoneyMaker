@@ -8,7 +8,9 @@ import {
   Delete,
   Query,
   UseGuards,
+  Logger,
 } from '@nestjs/common';
+import { Headers as NestHeaders } from '@nestjs/common';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -16,6 +18,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiQuery,
+  ApiHeader,
 } from '@nestjs/swagger';
 import { AppointmentsService } from './appointments.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -24,16 +27,30 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { Tenant } from '../../common/decorators/tenant.decorator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { AppointmentStatus } from '@prisma/client';
+import { GetAppointmentsDto } from './dto/get-appointments.dto';
+import { CreateAppointmentDto } from './dto/create-appointment.dto';
+import { UpdateAppointmentDto } from './dto/update-appointment.dto';
+import { Cacheable, CacheInvalidate } from '../../common/decorators/cache.decorator';
+import { CacheService } from '../../common/cache/cache.service';
 
 @ApiTags('Agendamentos')
 @Controller({ path: 'appointments', version: '1' })
-@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth('access-token')
 @ApiSecurity('client-id')
 export class AppointmentsController {
-  constructor(private readonly appointmentsService: AppointmentsService) {}
+  private readonly logger = new Logger(AppointmentsController.name);
+
+  constructor(
+    private readonly appointmentsService: AppointmentsService,
+    private readonly cacheService: CacheService,
+  ) {}
 
   @Get('calendar')
+  @Cacheable({
+    key: 'appointments:calendar',
+    ttl: 300, // 5 minutos
+    tags: ['appointments', 'calendar'],
+  })
   @ApiOperation({ summary: 'Obter agendamentos para o calendário' })
   @ApiResponse({ status: 200, description: 'Agendamentos do calendário' })
   @ApiQuery({ name: 'startDate', required: false, description: 'Data inicial (YYYY-MM-DD)' })
@@ -45,37 +62,81 @@ export class AppointmentsController {
     @Query('endDate') endDate?: string,
     @Query('categoryId') categoryId?: string,
   ) {
-    return await this.appointmentsService.getCalendarAppointments(
+    this.logger.log(
+      `Obtendo agendamentos do calendário para clientId: ${clientId}, startDate: ${startDate}, endDate: ${endDate}, categoryId: ${categoryId}`,
+    );
+
+    const result = await this.appointmentsService.getCalendarAppointments(
       clientId,
       startDate,
       endDate,
       categoryId,
     );
+
+    this.logger.log(`Agendamentos do calendário retornados com sucesso para clientId: ${clientId}`);
+    return result;
   }
 
   @Get('week')
+  @Cacheable({
+    key: 'appointments:week',
+    ttl: 300, // 5 minutos
+    tags: ['appointments', 'week'],
+  })
   @ApiOperation({ summary: 'Obter agendamentos da semana' })
   @ApiResponse({ status: 200, description: 'Agendamentos da semana' })
   @ApiQuery({ name: 'date', required: false, description: 'Data de referência (YYYY-MM-DD)' })
   async getWeekAppointments(@Tenant() clientId: string, @Query('date') date?: string) {
-    return await this.appointmentsService.getWeekAppointments(clientId, date);
+    this.logger.log(`Obtendo agendamentos da semana para clientId: ${clientId}, date: ${date}`);
+
+    const result = await this.appointmentsService.getWeekAppointments(clientId, date);
+
+    this.logger.log(`Agendamentos da semana retornados com sucesso para clientId: ${clientId}`);
+    return result;
   }
 
   @Get('today')
+  @Cacheable({
+    key: 'appointments:today',
+    ttl: 180, // 3 minutos
+    tags: ['appointments', 'today'],
+  })
   @ApiOperation({ summary: 'Obter agendamentos de hoje' })
   @ApiResponse({ status: 200, description: 'Agendamentos de hoje' })
   async getTodayAppointments(@Tenant() clientId: string) {
-    return await this.appointmentsService.getTodayAppointments(clientId);
+    this.logger.log(`Obtendo agendamentos de hoje para clientId: ${clientId}`);
+
+    const result = await this.appointmentsService.getTodayAppointments(clientId);
+
+    this.logger.log(`Agendamentos de hoje retornados com sucesso para clientId: ${clientId}`);
+    return result;
   }
 
   @Get('stats')
+  @Cacheable({
+    key: 'appointments:stats',
+    ttl: 600, // 10 minutos
+    tags: ['appointments', 'stats'],
+  })
   @ApiOperation({ summary: 'Obter estatísticas de agendamentos' })
   @ApiResponse({ status: 200, description: 'Estatísticas de agendamentos' })
   async getAppointmentStats(@Tenant() clientId: string) {
-    return await this.appointmentsService.getAppointmentStats(clientId);
+    this.logger.log(`Obtendo estatísticas de agendamentos para clientId: ${clientId}`);
+
+    const result = await this.appointmentsService.getAppointmentStats(clientId);
+
+    this.logger.log(
+      `Estatísticas de agendamentos retornadas com sucesso para clientId: ${clientId}`,
+    );
+    return result;
   }
 
   @Get('categories')
+  @Cacheable({
+    key: 'appointments:categories',
+    ttl: 1800, // 30 minutos
+    tags: ['appointments', 'categories'],
+  })
   @ApiOperation({ summary: 'Obter categorias de agendamentos' })
   @ApiResponse({ status: 200, description: 'Lista de categorias' })
   async getCategories(@Tenant() clientId: string) {
@@ -110,21 +171,17 @@ export class AppointmentsController {
   @ApiQuery({ name: 'startDate', required: false, description: 'Data inicial' })
   @ApiQuery({ name: 'endDate', required: false, description: 'Data final' })
   @ApiQuery({ name: 'categoryId', required: false, description: 'Filtrar por categoria' })
-  async findAll(
-    @Tenant() clientId: string,
-    @Query() paginationDto: PaginationDto,
-    @Query('status') status?: string,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
-    @Query('categoryId') categoryId?: string,
-  ) {
+  @ApiQuery({ name: 'userId', required: false, description: 'Filtrar por usuário' })
+  async findAll(@Tenant() clientId: string, @Query() query: GetAppointmentsDto) {
     const filters = {
-      status,
-      startDate,
-      endDate,
-      categoryId,
+      status: query.status,
+      startDate: query.startDate,
+      endDate: query.endDate,
+      categoryId: query.categoryId,
+      employeeId: query.employeeId,
+      userId: query.userId,
     };
-    return await this.appointmentsService.findAll(clientId, paginationDto, filters);
+    return await this.appointmentsService.findAll(clientId, query, filters);
   }
 
   @Get(':id')
@@ -136,17 +193,25 @@ export class AppointmentsController {
   }
 
   @Post()
+  @ApiHeader({
+    name: 'x-client-id',
+    description: 'ID do cliente',
+    required: true,
+  })
   @ApiOperation({ summary: 'Criar novo agendamento' })
   @ApiResponse({ status: 201, description: 'Agendamento criado com sucesso' })
   @ApiResponse({ status: 400, description: 'Dados inválidos' })
   @ApiResponse({ status: 409, description: 'Conflito de horário' })
-  async create(@Body() createAppointmentDto: any, @Tenant() clientId: string) {
-    // Adicionar clientId aos dados do appointment
-    const appointmentData = {
-      ...createAppointmentDto,
-      clientId,
-    };
-    return await this.appointmentsService.create(appointmentData);
+  async create(@Body() createAppointmentDto: CreateAppointmentDto, @Tenant() clientId: string) {
+    this.logger.log(`Criando agendamento para clientId: ${clientId}`);
+    this.logger.debug(`Dados recebidos: ${JSON.stringify(createAppointmentDto)}`);
+
+    createAppointmentDto.clientId = clientId;
+
+    const result = await this.appointmentsService.create(createAppointmentDto);
+
+    this.logger.log(`Agendamento criado com sucesso para clientId: ${clientId}`);
+    return result;
   }
 
   @Patch(':id')
@@ -156,10 +221,16 @@ export class AppointmentsController {
   @ApiResponse({ status: 409, description: 'Conflito de horário' })
   async update(
     @Param('id') id: string,
-    @Body() updateAppointmentDto: any,
+    @Body() updateAppointmentDto: UpdateAppointmentDto,
     @Tenant() clientId: string,
   ) {
-    return await this.appointmentsService.update(id, clientId, updateAppointmentDto);
+    this.logger.log(`Atualizando agendamento ${id} para clientId: ${clientId}`);
+    this.logger.debug(`Dados recebidos: ${JSON.stringify(updateAppointmentDto)}`);
+
+    const result = this.appointmentsService.update(id, clientId, updateAppointmentDto);
+
+    this.logger.log(`Agendamento atualizado com sucesso para clientId: ${clientId}`);
+    return result;
   }
 
   @Delete(':id')
@@ -167,7 +238,12 @@ export class AppointmentsController {
   @ApiResponse({ status: 200, description: 'Agendamento deletado com sucesso' })
   @ApiResponse({ status: 404, description: 'Agendamento não encontrado' })
   async remove(@Param('id') id: string, @Tenant() clientId: string) {
-    return await this.appointmentsService.remove(id);
+    this.logger.log(`Deletando agendamento ${id} para clientId: ${clientId}`);
+
+    const result = await this.appointmentsService.remove(id);
+
+    this.logger.log(`Agendamento deletado com sucesso para clientId: ${clientId}`);
+    return result;
   }
 
   @Patch(':id/status')
@@ -178,13 +254,39 @@ export class AppointmentsController {
     @Body('status') status: string,
     @Tenant() clientId: string,
   ) {
-    return await this.appointmentsService.updateStatus(id, status as AppointmentStatus);
+    this.logger.log(
+      `Atualizando status do agendamento ${id} para ${status} em clientId: ${clientId}`,
+    );
+
+    const result = await this.appointmentsService.updateStatus(id, status as AppointmentStatus);
+
+    this.logger.log(`Status do agendamento atualizado com sucesso para clientId: ${clientId}`);
+    return result;
   }
 
   @Post('bulk')
+  @CacheInvalidate('appointments:calendar')
   @ApiOperation({ summary: 'Criar múltiplos agendamentos' })
   @ApiResponse({ status: 201, description: 'Agendamentos criados com sucesso' })
   async createBulk(@Body() appointments: any[], @Tenant() clientId: string) {
-    return await this.appointmentsService.createBulk(appointments);
+    const result = await this.appointmentsService.createBulk(appointments);
+
+    // Invalidar cache relacionado
+    await this.cacheService.invalidateByTags(['appointments']);
+
+    return result;
+  }
+
+  @Get('cache/clear')
+  @ApiOperation({ summary: 'Limpar cache de agendamentos' })
+  async clearCache() {
+    await this.cacheService.invalidateByTags(['appointments']);
+    return { success: true, message: 'Cache de agendamentos limpo com sucesso' };
+  }
+
+  @Get('cache/stats')
+  @ApiOperation({ summary: 'Obter estatísticas do cache de agendamentos' })
+  async getCacheStats() {
+    return this.cacheService.getStats();
   }
 }

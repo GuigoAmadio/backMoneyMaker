@@ -1,4 +1,14 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Req, Get } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+  Req,
+  Get,
+  Logger,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiHeader } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { Request } from 'express';
@@ -16,6 +26,8 @@ import { AuthGuard } from '@nestjs/passport';
 @Controller({ path: 'auth', version: '1' })
 @UseGuards(ThrottlerGuard)
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(private authService: AuthService) {}
 
   @Public()
@@ -39,7 +51,17 @@ export class AuthController {
     description: 'Email já cadastrado',
   })
   async register(@Body() registerDto: RegisterDto, @Tenant() clientId: string) {
-    return this.authService.register(registerDto, clientId);
+    this.logger.log(
+      `Tentativa de registro para clientId: ${clientId}, email: ${registerDto.email}`,
+    );
+    try {
+      const result = await this.authService.register(registerDto, clientId);
+      this.logger.log(`Registro realizado com sucesso para email: ${registerDto.email}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Erro no registro para email: ${registerDto.email}`, error);
+      throw error;
+    }
   }
 
   @Public()
@@ -61,7 +83,15 @@ export class AuthController {
     description: 'Credenciais inválidas',
   })
   async login(@Body() loginDto: LoginDto, @Tenant() clientId: string): Promise<LoginResponseDto> {
-    return this.authService.login(loginDto, clientId);
+    this.logger.log(`Tentativa de login para clientId: ${clientId}, email: ${loginDto.email}`);
+    try {
+      const result = await this.authService.login(loginDto, clientId);
+      this.logger.log(`Login realizado com sucesso para email: ${loginDto.email}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Erro no login para email: ${loginDto.email}`, error);
+      throw error;
+    }
   }
 
   @UseGuards(AuthGuard('jwt'))
@@ -77,7 +107,16 @@ export class AuthController {
     description: 'Token inválido ou expirado',
   })
   async getProfile(@Req() req: Request) {
-    return this.authService.getProfile(req.user);
+    const userId = (req.user as any)?.id || 'unknown';
+    this.logger.log(`Perfil solicitado para usuário: ${userId}`);
+    try {
+      const result = await this.authService.getProfile(req.user);
+      this.logger.log(`Perfil obtido com sucesso para usuário: ${userId}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Erro ao obter perfil para usuário: ${userId}`, error);
+      throw error;
+    }
   }
 
   @Public()

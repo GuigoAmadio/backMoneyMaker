@@ -8,17 +8,23 @@ import {
   Delete,
   Query,
   UseGuards,
+  Logger,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
-
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiSecurity,
+  ApiOperation,
+  ApiResponse,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { PaginationDto } from '../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard, UserRole } from '../../common/guards/roles.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Tenant } from '../../common/decorators/tenant.decorator';
+import { Cacheable, CacheInvalidate } from '../../common/decorators/cache.decorator';
+import { CacheService } from '../../common/cache/cache.service';
 
 @ApiTags('Usuários')
 @Controller({ path: 'users', version: '1' })
@@ -26,67 +32,97 @@ import { Tenant } from '../../common/decorators/tenant.decorator';
 @ApiBearerAuth('access-token')
 @ApiSecurity('client-id')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  private readonly logger = new Logger(UsersController.name);
 
-  @Post()
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Criar novo usuário' })
-  @ApiResponse({ status: 201, description: 'Usuário criado com sucesso' })
-  @ApiResponse({ status: 400, description: 'Dados inválidos' })
-  @ApiResponse({ status: 409, description: 'Email já cadastrado' })
-  create(@Body() createUserDto: CreateUserDto, @Tenant() clientId: string) {
-    return this.usersService.create(createUserDto, clientId);
-  }
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly cacheService: CacheService,
+  ) {}
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.SUPER_ADMIN)
+  @Cacheable({
+    key: 'users:list',
+    ttl: 300, // 5 minutos
+    tags: ['users', 'list'],
+  })
   @ApiOperation({ summary: 'Listar usuários' })
   @ApiResponse({ status: 200, description: 'Lista de usuários' })
-  findAll(@Query() paginationDto: PaginationDto, @Tenant() clientId: string) {
-    return this.usersService.findAll(clientId, paginationDto);
+  async findAll(@Tenant() clientId: string, @Query() query: any) {
+    this.logger.log(`Listando usuários para clientId: ${clientId}`);
+    return await this.usersService.findAll(clientId, query);
   }
 
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.SUPER_ADMIN)
+  @Cacheable({
+    key: 'users:detail',
+    ttl: 600, // 10 minutos
+    tags: ['users', 'detail'],
+  })
   @ApiOperation({ summary: 'Buscar usuário por ID' })
   @ApiResponse({ status: 200, description: 'Usuário encontrado' })
   @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
-  findOne(@Param('id') id: string, @Tenant() clientId: string) {
-    return this.usersService.findOne(id, clientId);
+  async findOne(@Param('id') id: string, @Tenant() clientId: string) {
+    this.logger.log(`Buscando usuário ${id} para clientId: ${clientId}`);
+    return await this.usersService.findOne(id, clientId);
+  }
+
+  @Post()
+  @CacheInvalidate('users:list')
+  @ApiOperation({ summary: 'Criar novo usuário' })
+  @ApiResponse({ status: 201, description: 'Usuário criado com sucesso' })
+  @ApiResponse({ status: 400, description: 'Dados inválidos' })
+  async create(@Body() createUserDto: any, @Tenant() clientId: string) {
+    this.logger.log(`Criando usuário para clientId: ${clientId}`);
+    const user = await this.usersService.create(createUserDto, clientId);
+
+    // Invalidar cache específico do usuário criado
+    if (user?.id) {
+      await this.cacheService.delete(`users:detail:${user.id}`);
+    }
+
+    return user;
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @CacheInvalidate('users:list')
   @ApiOperation({ summary: 'Atualizar usuário' })
   @ApiResponse({ status: 200, description: 'Usuário atualizado com sucesso' })
   @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
-  @ApiResponse({ status: 409, description: 'Email já está em uso' })
-  update(
-    @Param('id') id: string,
-    @Body() updateUserDto: UpdateUserDto,
-    @Tenant() clientId: string,
-  ) {
-    return this.usersService.update(id, updateUserDto, clientId);
+  async update(@Param('id') id: string, @Body() updateUserDto: any, @Tenant() clientId: string) {
+    this.logger.log(`Atualizando usuário ${id} para clientId: ${clientId}`);
+    const user = await this.usersService.update(id, updateUserDto, clientId);
+
+    // Invalidar cache específico do usuário atualizado
+    await this.cacheService.delete(`users:detail:${id}`);
+
+    return user;
   }
 
   @Delete(':id')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Remover usuário' })
-  @ApiResponse({ status: 200, description: 'Usuário removido com sucesso' })
+  @CacheInvalidate('users:list')
+  @ApiOperation({ summary: 'Deletar usuário' })
+  @ApiResponse({ status: 200, description: 'Usuário deletado com sucesso' })
   @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
-  remove(@Param('id') id: string, @Tenant() clientId: string) {
-    return this.usersService.remove(id, clientId);
+  async remove(@Param('id') id: string, @Tenant() clientId: string) {
+    this.logger.log(`Deletando usuário ${id} para clientId: ${clientId}`);
+    await this.usersService.remove(id, clientId);
+
+    // Invalidar cache específico do usuário removido
+    await this.cacheService.delete(`users:detail:${id}`);
+
+    return { success: true, message: 'Usuário removido com sucesso' };
   }
 
-  @Patch(':id/status')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Atualizar status do usuário' })
-  @ApiResponse({ status: 200, description: 'Status atualizado com sucesso' })
-  updateStatus(
-    @Param('id') id: string,
-    @Body('status') status: string,
-    @Tenant() clientId: string,
-  ) {
-    return this.usersService.updateStatus(id, status, clientId);
+  @Get('cache/clear')
+  @ApiOperation({ summary: 'Limpar cache de usuários' })
+  async clearCache() {
+    await this.cacheService.invalidateByTags(['users']);
+    return { success: true, message: 'Cache de usuários limpo com sucesso' };
+  }
+
+  @Get('cache/stats')
+  @ApiOperation({ summary: 'Obter estatísticas do cache de usuários' })
+  async getCacheStats() {
+    return this.cacheService.getStats();
   }
 }

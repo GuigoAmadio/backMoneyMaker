@@ -1,0 +1,274 @@
+[
+  {
+    "nome": "Ademir Fragnani Jr",
+    "foto": "/funcionarios/Ademir Fragnani Jr.jpeg.jpg",
+    "contato": "(19) 99999-8880",
+    "convite": "Sim",
+    "horarios": [
+      "2a - 8:00, 10:00, 16:00 e 19:30",
+      "4a - 8:00, 10:00, 12:00 e 19:30",
+      "6a - 10:00, 14:00 e 18:00"
+    ],
+    "observacoes": "Psicanalista Clínico com experiência anterior no mundo corporativo. Atua principalmente com adultos, abordando temas como burnout, gestão e transição de carreira, crises de meia idade e relacionamentos. Com mais de 25 anos em posições de Alta Gerência em empresas multinacionais, conhece bem a cultura e o clima dessas organizações, tendo tido reconhecida atuação na gestão de pessoas nesses ambientes. Leva sua vivência para a prática clínica do mundo afora, sempre focando em uma abordagem não só de entendimento, mas de reflexões e novas perspectivas para as demandas de seus pacientes. Inglês fluente, espanhol intermediário. Casado, teve três filhas que fizeram intercâmbio, sendo uma residente no exterior por sete anos."
+  },
+  {
+    "nome": "Anitta Carelli",
+    "foto": "/funcionarios/Anita Careli - psicanalista Clínica.jpeg.jpg",
+    "contato": "(11) 98263-4538",
+    "convite": "Sim",
+    "horarios": ["3a - 10:00 e 15:00", "4a - 14:00 e 15:00", "5a - 10:00 e 11:00"],
+    "observacoes": "Comunicação Social- Publicidade e Propaganda- UNIMEP Piracicaba. Psicanálise- CFPC. Público alvo: Pacientes homens e mulheres a partir de 18 anos."
+  },
+  {
+    "nome": "Carlos Henrique Mathias",
+    "foto": "/funcionarios/Carlos Henrique Mathias - Psicanalista Clínico.jpeg.jpg",
+    "contato": "(19) 98111-5101",
+    "convite": "Sim",
+    "horarios": [
+      "2a - 13:30, 15:00, 17:00 e 18:30",
+      "3a - 18:30",
+      "4a - 11:00 e 13:30",
+      "5a - 8:00 e 9:30"
+    ],
+    "observacoes": "Formação: Engenharia Civil Universidade Gama Filho, Psicanalista Centro de Formação em Psicanálise Clínica, Reiki pelo NeoReiki Institute, ADI-Acesso Direto ao Inconsciente pelo Centro de Formação em Psicanálise Clínica, Hipnoterapia pela OMNI Brasil. Experiência no Exterior: Residência em Angola, África, durante 24 anos, Residência em Portugal por 3 anos, Residência no Peru por 1 ano. Relacionamento empresarial com os seguintes países: Estados Unidos, Rússia, China, Espanha, Inglaterra, Namíbia, Gana, Moçambique e África do Sul."
+  },
+  {
+    "nome": "Carla Truzzi",
+    "foto": "/funcionarios/Ida Carla Truzzi - Psicanalista Clínica.jpeg.jpg",
+    "contato": "39 346 308-0785",
+    "convite": "Sim",
+    "horarios": ["3a - 8:00, 9:00 e 10:00", "5a - 8:00, 9:00 e 10:00"],
+    "observacoes": ""
+  },
+  {
+    "nome": "Carlos Quesada",
+    "foto": "/funcionarios/Paulo Quesada de Almeida - Psicanalista CLínico.jpeg.jpg",
+    "contato": "(914) 656-9151",
+    "convite": "Sim",
+    "horarios": ["4a - 8:30 e 21:00.", "Sábados- 8:00 e 9:00"],
+    "observacoes": "Expatriado vivendo há 5 anos nos Estados Unidos. Formação: Administração PUCCAMP, Psicanálise Clínica CFPC, Especialização em Tratamento Clínico com uso de Métodos de Acesso Direto ao Inconsciente CFPC, Hipnoterapia OMNI, Experiência Somática ASSOCIAÇÃO BRASILEIRA DO TRAUMA, PNL ACTIUS, Inteligência Relacional Sistêmica IDESV, Mestrando em Mental Health Counseling BRESCIA UNIVERSITY. Público-alvo: Homens e Mulheres acima dos 18 anos."
+  },
+  {
+    "nome": "Eduardo Louzas",
+    "foto": "/funcionarios/Eduardo Louzas - Psicanalista Clínico.jpeg.jpg",
+    "contato": "(12) 99787-7773",
+    "convite": "Sim",
+    "horarios": [
+      "2a feira 10h e 19h",
+      "3a feira 11h, 15h e 16h",
+      "4a feira 15h e 19h",
+      "5a feira 10h, 11h, 17h e 19h",
+      "6a feira 15h e 16h"
+    ],
+    "observacoes": "Formação Acadêmica: Engenharia Civil, Pós-graduação: Engenharia de Segurança, Psicanálise Clínica, ADI (Acesso Direto ao Inconsciente), Constelação Familiar, A cura pela consciência. Pós-graduado em Medicina Psicosomática, GPI (Grupo de Estudos de Psicanálise Integral Keppe &Pacheco) Cursando Teologia Clínica na Faculdade Trilógica Keppe &Pacheco."
+  },
+  {
+    "nome": "Elza Giorgi (Video)",
+    "foto": "/funcionarios/Elza pisicanalista Clínica.jpeg.jpg",
+    "contato": "(19) 98129-0884",
+    "convite": "Sim",
+    "horarios": [],
+    "observacoes": "Não consegue disponibilizar horários neste momento porque está com a agenda comprometida."
+  },
+  {
+    "nome": "Flávio Caputo",
+    "foto": "URL_ou_nome_do_arquivo",
+    "contato": "(19) 99649-8354",
+    "convite": "Sim",
+    "horarios": [],
+    "observacoes": "Encaminhei a apresentação dia 07/07"
+  },
+  {
+    "nome": "Gabriela Reis",
+    "foto": "/funcionarios/Gabriela Reis - Psicanalista Clínica.jpeg.jpg",
+    "contato": "(11)99613-3022",
+    "convite": "Sim",
+    "horarios": [
+      "2a - 10:00, 11:00, 13:00 e 14:00.",
+      "3a - 11:00, 12:00, 13:00 e 14:00.",
+      "4a - 10:00, 11:00, 12:00, 13:00 e 14:00.",
+      "5a - 12:00, 13:00 e 14:00.",
+      "6a - 10:00, 11:00, 14:00 e 15:00."
+    ],
+    "observacoes": "Fonoaudiologia pela Universidade do Norte Paulista, Gestão Financeira pela Fundação Getúlio Vargas, Psicanálise pelo Centro de Formação em Psicanálise Clínica. Público Alvo: Pacientes acima de 18 anos."
+  },
+  {
+    "nome": "José Carlos Pires Júnior",
+    "foto": "URL_ou_nome_do_arquivo",
+    "contato": "(11) 976026002",
+    "convite": "Sim",
+    "horarios": [
+      "3a - 6h30 às 7h30",
+      "4a - 17:00, 18:00, 19:00 e 21:00",
+      "5a - 6h30 às 7h30",
+      "5a - 18:00, 19:00, 20:00 e 21:00."
+    ],
+    "observacoes": "Formação: Ciências da Computação – PUC–SP, Marketing de Serviços e Gestão em Tecnologia – FGV–SP, Psicanálise – CFPC, Campinas. Experiência: 25+ anos de experiência em multinacionais, ampla vivência internacional e multicultural (Europa, Ásia e Américas), liderança de times globais. Experiência como expatriado (País: Alemanha). Público-alvo: Adolescentes (a partir de 12 anos) e adultos. Atendimento em português, inglês e espanhol."
+  },
+  {
+    "nome": "Juliana Hipólito",
+    "foto": "URL_ou_nome_do_arquivo",
+    "contato": "(19) 99967-7966",
+    "convite": "Sim",
+    "horarios": ["2a - 20:00", "3a - 20:00"],
+    "observacoes": "Formação: Relações públicas - Puc campinas, MBA gestão de pessoas e Mkt pela FGV, Psicanalista - CFPC, Pós Psicanalista infantil - CFPC. Público alvo: indiferente."
+  },
+  {
+    "nome": "Juliano Casarin (Video)",
+    "foto": "/funcionarios/Juliano Casarin - psicanalista Clínico.jpeg.jpg",
+    "contato": "(19) 99684-6555",
+    "convite": "Sim",
+    "horarios": ["2a - 16:00.", "5a - 10:00 e 18:00."],
+    "observacoes": ""
+  },
+  {
+    "nome": "Laura Truzzi",
+    "foto": "/funcionarios/Laura Truzzi - Psicanalista Clínica.jpeg.jpg",
+    "contato": "(11) 99580-4327",
+    "convite": "Sim",
+    "horarios": [
+      "2a - 10:00, 11:00, 13:00 e 14:00.",
+      "3a - 11:00, 12:00 e 13:00.",
+      "4a - 10:00, 11:00, 12:00 e 13:00.",
+      "5a - 12:00 e 11:00.",
+      "6a - 10:00 e 11:00."
+    ],
+    "observacoes": "Nome: Laura Truzzi Guyot. Formação: Comunicação Social (graduação) e pós em Gestão de Pessoas. Analista Disc. Practiner em PNL. Coaching - SBC. Psicanálise - CFPC. Pós em Psicanálise - CFPC. ADI - CFPC. Psicanálise Infantil - CFPC."
+  },
+  {
+    "nome": "Luis Marcelo Costa e Silva",
+    "foto": "URL_ou_nome_do_arquivo",
+    "contato": "(19) 99174-5453",
+    "convite": "Sim",
+    "horarios": [],
+    "observacoes": "Irá integrar o grupo a posteriori em virtude de outros compromissos."
+  },
+  {
+    "nome": "Marina Valente",
+    "foto": "/funcionarios/Mariana Valente - Psicanalista CLínica.jpeg.jpg",
+    "contato": "(19) 98850-1868",
+    "convite": "Sim",
+    "horarios": [
+      "2a - 10:30, 19:00, 20:00.",
+      "3a - 10:30, 19:00, 20:00.",
+      "4a - 19:00 e 20:00.",
+      "5a - 9:00 e 10:00."
+    ],
+    "observacoes": "Formação: Adm - PUCCAMP, Pós grad.: Com. Exterior e Mkt Internacional - Politécnica de Madrid, Pós grad.: Neuropsicologia FAMEESP, Psicanálise - CFPC."
+  },
+  {
+    "nome": "Masayuki",
+    "foto": "/funcionarios/Masayuki Kawakami - Psicanalista Clínico.jpeg.jpg",
+    "contato": "(11) 99386-1655",
+    "convite": "Sim",
+    "horarios": ["6a - 08:00, 09:00, 10:00, 11:00, 15:00, 16:00, 17:00, 18:00, 19:00, 21:00"],
+    "observacoes": "Engenharia - Poli USP, Pós Elementos Finitos - ITA, Pós administração - FEAUSP, Psicanálise - CFPC. Público Alvo: adulto entre 20 e 100 anos."
+  },
+  {
+    "nome": "Mary Louzas",
+    "foto": "URL_ou_nome_do_arquivo",
+    "contato": "(12) 99723-9566",
+    "convite": "Sim",
+    "horarios": ["4a - 9:00, 10:00 e 11:00.", "5a - 10:00 e 11:00."],
+    "observacoes": "Formação: Decoradora, Recursos Humanos, Practitioner, Física Quântica, Metafísica da Saúde, Constelação Familiar, Eneagrama, Pós Psicanálise, ADI, Terapia de Casal, Consciência Curativa / gerenciamento emocional, Mulheres no Divã, Cursando Teologia Clínica / Faculdade Trilógica."
+  },
+  {
+    "nome": "Milton Domingues",
+    "foto": "/funcionarios/Milton Domingues - Psicanalista Clínico.jpeg.jpg",
+    "contato": "(19) 99496-2777",
+    "convite": "Sim",
+    "horarios": [
+      "2a - 8:00 e 09:00, 19:00 e 20:00.",
+      "3a - 8:00 e 09:00, 19:00 e 20:00.",
+      "4a - 8:00 e 09:00, 19:00 e 20:00.",
+      "5a - 8:00 e 09:00, 19:00 e 20:00.",
+      "6a - 8:00 e 09:00, 19:00 e 20:00."
+    ],
+    "observacoes": "Graduação: Bacharel em Turismo - PUCCAMP, Especialização em Marketing - PUCCAMP, Psicanálise Clínica - Centro de Formação em Psicanálise Clínica (Turma 40), ADI - Centro de Formação em Psicanálise Clínica, Psicanálise Infantil - Centro de Formação em Psicanálise Clínica, Pós Graduação em Psicanálise Clínica - Centro de Formação em Psicanálise Clínica."
+  },
+  {
+    "nome": "Paula Volpe",
+    "foto": "/funcionarios/Paula Volpe - Psicanalista Clínica.jpeg.jpg",
+    "contato": "(11) 98555-6496",
+    "convite": "Sim",
+    "horarios": [
+      "2a - 7:00, 8:00, 11:00, 14:00, 16:00 e 18:00.",
+      "3a - 7:00, 11:00, 12:00, 15:00 e 16:00.",
+      "4a - 7:00, 11:00, 12:00, 14:00, 15:00 e 18:00.",
+      "5a - 7:00, 8:00, 11:00, 13:00 e 17:00."
+    ],
+    "observacoes": "LETRAS, PÓS GRADUAÇÃO EM MARKETING, PSICANÁLISE CLÍNICA, ADI - Acesso Direto ao Inconsciente, ESPEC. EM PSICANÁLISE PARA CRIANÇAS E ADOLESCENTES, HIPNOTERAPIA ERICKSONIANA, PSICOLOGIA ANALÍTICA (JUNGUIANA), PSICOSSOMÁTICA (em formação), EDUCAÇÃO CONT. - SUJEITOS DA PSICANÁLISE (em formação) UNIVERSIDADE MACKENZIE, FAAP, CENTRO DE FORMAÇÃO EM PSICANÁLISE CLÍNICA, CEFAS - ESCOLA DE PSICANÁLISE, INSTITUTO SOFIA BAUER, IJEP- INSTITUTO JUNGUIANO DE ENSINO E PESQUISA, INSTITUTO FREEDOM, PUC - SÃO PAULO."
+  },
+  {
+    "nome": "Paula Carelli de Noronha Peres",
+    "foto": "/funcionarios/Paula Carelli de Noronha Peres - Psicanalista Clínica.jpeg.jpg",
+    "contato": "(19) 99602-6867",
+    "convite": "Sim",
+    "horarios": ["4a - 15:00", "5a - 18:00", "6a - 16:00, 17:00, 18:00 e 19:00 horas"],
+    "observacoes": "Formada em Medicina pela Puccamp em 1994; residência médica em cirurgia geral (1996 a 1998); residência médica em cirurgia plástica (1999 a 2001). Formada em Psicanálise pela Escola de Psicanálise Clínica em 2005; curso de ADI (acesso direto ao inconsciente). Disponível para atendimentos: sextas-feiras: 16 horas; 17 horas; 18 horas e 19 horas; quartas- feiras: 15 horas; quintas-feiras: 18 horas."
+  },
+  {
+    "nome": "Pedro Arruda",
+    "foto": "/funcionarios/Pedro Aramis Arruda - Psicanalista Clínico.jpeg.jpg",
+    "contato": "(21) 99692-5439",
+    "convite": "Sim",
+    "horarios": ["3a - 17:00 e 20:00.", "4a - 16:00 e 19:00."],
+    "observacoes": "Decidi dedicar-me à Psicanálise, concluindo o curso no Centro de Formação em Psicanálise Clínica (CFPC) na turma XLIII, 2024. No CFPC, também conclui os cursos de Terapia de Casais, Acesso Direto ao Inconsciente e Psicanálise Infantil. Formei-me em Educação Física 1975, cursei Estado-Maior em 1987/88 e especializei-me em Análise de Situações de Crise em 1999. Servi em vários estados no Brasil e cumpri duas missões no exterior, acompanhado da família. Cursei a Escola de Guerra do Exército dos Estados Unidos (USAWC) em 1992/93 e fui Adido de Defesa em Angola (1999/2000). Após deixar o serviço, Gerente de Segurança Empresarial da PETROBRAS, responsável pela proteção de pessoas, instalações e informações das empresas do Sistema, entre 2005 e 2015, oportunidade em que pude apoiar empregados em situações de crises no exterior, como na Nigéria (2009/10) e na Líbia (2011)."
+  },
+  {
+    "nome": "Reinaldo Lima",
+    "foto": "URL_ou_nome_do_arquivo",
+    "contato": "(19) 99624-1515",
+    "convite": "Sim",
+    "horarios": [],
+    "observacoes": "Terá condições de integrar o grupo a partir de Outubro/2025."
+  },
+  {
+    "nome": "Silvia de Souza",
+    "foto": "URL_ou_nome_do_arquivo",
+    "contato": "(19) 99201-4555",
+    "convite": "",
+    "horarios": [],
+    "observacoes": "Ainda não respondeu."
+  },
+  {
+    "nome": "Sylvia Maluf",
+    "foto": "/funcionarios/Sylvia Duarte Maluf - Psicanalista Clínica.jpeg.jpg",
+    "contato": "(11) 98555-1212",
+    "convite": "Sim",
+    "horarios": ["2a - 9:00", "4a - 9:00 e 10:00", "5a - 9:00 e 10:00"],
+    "observacoes": "Cobra R$ 200,00 atualmente. Formação: Direito - USF, Psicanálise - CFPC, Psicologia Analítica - IJEP - SP. Público Alvo: 15 e 70 anos - homem ou mulher."
+  },
+  {
+    "nome": "Soraya Benito",
+    "foto": "URL_ou_nome_do_arquivo",
+    "contato": "(11) 98137-0324",
+    "convite": "",
+    "horarios": [],
+    "observacoes": "A partir de Fevereiro de 2026."
+  },
+  {
+    "nome": "Tacyana Salomão",
+    "foto": "/funcionarios/Tacyana Salomão - Psicanalista Clínica.jpeg.jpg",
+    "contato": "(11) 91236-8270",
+    "convite": "Sim",
+    "horarios": ["3a - 9:00, 10:00 e 16:00"],
+    "observacoes": "Consegue disponibilizar estes horários a partir de Agosto/2025. Introdução à Escuta Psicanalítica - SOCIEDADE BRASILEIRA DE PSICANÁLISE, São Paulo. Sándor Ferenczi - GRUPO ESTUDOS DANIEL KUPPERMANN, São Paulo. Escuta da Subjetividade IPO – HOSPITAL DAS CLÍNICAS, São Paulo. Psicanálise Clínica - CENTRO DE PSICANÁLISE WC, Campinas. Psicanálise, Pós Graduação FAATESP, Campinas. Atendimento pacientes entre 15 a 80 anos – homem ou mulher."
+  },
+  {
+    "nome": "Vilma Zotareli",
+    "foto": "/funcionarios/Vilma Zotareli - Psicanalista Clínico.jpeg.jpg",
+    "contato": "(19) 98122-3408",
+    "convite": "Sim",
+    "horarios": ["4a - 16:00 às 20:00 horas horário do Brasil"],
+    "observacoes": "Formação: Letras, PUCCAMP. Especialização, Mestrado e Doutorado, UNICAMP. Especialização Clínica, CFPC. Especialização em Tratamento Clínico com uso de Métodos de Acesso Direto ao Inconsciente (ADI), CFPC. Público-alvo: Homens e Mulheres entre 18 a 80 anos."
+  },
+  {
+    "nome": "Waldomiro N. Santos",
+    "foto": "URL_ou_nome_do_arquivo",
+    "contato": "(19) 99998-9587",
+    "convite": "Sim",
+    "horarios": ["2a - 10:00", "3a - 10:00"],
+    "observacoes": "Formação: Engenharia Elétrica – UNICAMP, Física – UNICAMP, Psicanálise – CFPC, Pós-graduação em Psicanálise – FAATESP, ADI (Acesso Direto ao Inconsciente) - CFPC, Hipnose Ericksoniana – ACT Institute, Focalização - INSTITUTO DE FOCALIZAÇÃO E ALQUIMIA INTERIOR, Psicotraumatologia - INSTITUTO DE FOCALIZAÇÃO E ALQUIMIA INTERIOR. Público alvo: pacientes maiores de 18 anos."
+  }
+]

@@ -3,17 +3,190 @@ import {
   ConflictException,
   NotFoundException,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
 import { JwtService } from '@nestjs/jwt';
+import { CacheService } from '../../../common/cache/cache.service';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class CustomersService {
+  private readonly logger = new Logger(CustomersService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private cacheService: CacheService,
   ) {}
+
+  // Criar customer
+  async create(createCustomerDto: any, clientId: string) {
+    this.logger.log(`Criando cliente do ecommerce para clientId: ${clientId}`);
+    this.logger.debug(`Dados recebidos: ${JSON.stringify(createCustomerDto)}`);
+
+    try {
+      const { firstName, lastName, email, password } = createCustomerDto;
+
+      // Verificar se já existe um customer com este email para este cliente
+      const existingCustomer = await this.prisma.customer.findUnique({
+        where: {
+          clientId_email: {
+            clientId,
+            email,
+          },
+        },
+      });
+
+      if (existingCustomer) {
+        this.logger.warn(`Email já em uso: ${email} para clientId: ${clientId}`);
+        throw new ConflictException('Email já está em uso');
+      }
+
+      // Hash da senha
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Criar customer
+      const customer = await this.prisma.customer.create({
+        data: {
+          id: crypto.randomUUID(),
+          clientId,
+          firstName,
+          lastName,
+          email,
+          password: hashedPassword,
+          isActive: true,
+          emailVerified: false,
+        },
+      });
+
+      this.logger.log(`Cliente criado com sucesso: ${customer.id} para clientId: ${clientId}`);
+
+      const result = {
+        success: true,
+        data: {
+          id: customer.id,
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          email: customer.email,
+          emailVerified: customer.emailVerified,
+        },
+        message: 'Cliente criado com sucesso',
+      };
+
+      this.logger.log(`Cliente retornado com sucesso para clientId: ${clientId}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Erro ao criar cliente para clientId: ${clientId}`, error);
+      throw error;
+    }
+  }
+
+  // Atualizar customer
+  async update(id: string, updateCustomerDto: any, clientId: string) {
+    this.logger.log(`Atualizando cliente ${id} para clientId: ${clientId}`);
+    this.logger.debug(`Dados recebidos: ${JSON.stringify(updateCustomerDto)}`);
+
+    try {
+      // Verificar se o customer existe
+      const existingCustomer = await this.prisma.customer.findFirst({
+        where: {
+          id,
+          clientId,
+        },
+      });
+
+      if (!existingCustomer) {
+        this.logger.warn(`Cliente não encontrado: ${id} para clientId: ${clientId}`);
+        throw new NotFoundException('Cliente não encontrado');
+      }
+
+      // Se estiver atualizando o email, verificar se já existe
+      if (updateCustomerDto.email && updateCustomerDto.email !== existingCustomer.email) {
+        const emailExists = await this.prisma.customer.findUnique({
+          where: {
+            clientId_email: {
+              clientId,
+              email: updateCustomerDto.email,
+            },
+          },
+        });
+
+        if (emailExists) {
+          this.logger.warn(
+            `Email já em uso: ${updateCustomerDto.email} para clientId: ${clientId}`,
+          );
+          throw new ConflictException('Email já está em uso');
+        }
+      }
+
+      // Hash da senha se fornecida
+      if (updateCustomerDto.password) {
+        updateCustomerDto.password = await bcrypt.hash(updateCustomerDto.password, 10);
+      }
+
+      // Atualizar customer
+      const customer = await this.prisma.customer.update({
+        where: { id },
+        data: updateCustomerDto,
+      });
+
+      this.logger.log(`Cliente atualizado com sucesso: ${id} para clientId: ${clientId}`);
+
+      const result = {
+        success: true,
+        data: {
+          id: customer.id,
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          email: customer.email,
+          emailVerified: customer.emailVerified,
+        },
+        message: 'Cliente atualizado com sucesso',
+      };
+
+      this.logger.log(`Cliente retornado com sucesso para clientId: ${clientId}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Erro ao atualizar cliente ${id} para clientId: ${clientId}`, error);
+      throw error;
+    }
+  }
+
+  // Remover customer
+  async remove(id: string, clientId: string) {
+    this.logger.log(`Deletando cliente ${id} para clientId: ${clientId}`);
+
+    try {
+      // Verificar se o customer existe
+      const existingCustomer = await this.prisma.customer.findFirst({
+        where: {
+          id,
+          clientId,
+        },
+      });
+
+      if (!existingCustomer) {
+        this.logger.warn(`Cliente não encontrado: ${id} para clientId: ${clientId}`);
+        throw new NotFoundException('Cliente não encontrado');
+      }
+
+      // Deletar customer
+      await this.prisma.customer.delete({
+        where: { id },
+      });
+
+      this.logger.log(`Cliente deletado com sucesso: ${id} para clientId: ${clientId}`);
+
+      return {
+        success: true,
+        message: 'Cliente deletado com sucesso',
+      };
+    } catch (error) {
+      this.logger.error(`Erro ao deletar cliente ${id} para clientId: ${clientId}`, error);
+      throw error;
+    }
+  }
 
   // Registro de novo customer
   async register(clientId: string, registerDto: any) {

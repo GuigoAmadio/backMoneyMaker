@@ -8,6 +8,7 @@ import {
   Delete,
   Query,
   UseGuards,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -26,6 +27,8 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard, UserRole } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Tenant } from '../../common/decorators/tenant.decorator';
+import { Cacheable, CacheInvalidate } from '../../common/decorators/cache.decorator';
+import { CacheService } from '../../common/cache/cache.service';
 
 @ApiTags('Serviços')
 @Controller({ path: 'services', version: '1' })
@@ -33,7 +36,12 @@ import { Tenant } from '../../common/decorators/tenant.decorator';
 @ApiBearerAuth('access-token')
 @ApiSecurity('client-id')
 export class ServicesController {
-  constructor(private readonly servicesService: ServicesService) {}
+  private readonly logger = new Logger(ServicesController.name);
+
+  constructor(
+    private readonly servicesService: ServicesService,
+    private readonly cacheService: CacheService,
+  ) {}
 
   @Post()
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
@@ -42,11 +50,22 @@ export class ServicesController {
   @ApiResponse({ status: 400, description: 'Dados inválidos' })
   @ApiResponse({ status: 409, description: 'Nome do serviço já está em uso' })
   create(@Body() createServiceDto: CreateServiceDto, @Tenant() clientId: string) {
-    return this.servicesService.create(clientId, createServiceDto);
+    this.logger.log(`Criando serviço para clientId: ${clientId}`);
+    this.logger.debug(`Dados recebidos: ${JSON.stringify(createServiceDto)}`);
+
+    const result = this.servicesService.create(clientId, createServiceDto);
+
+    this.logger.log(`Serviço criado com sucesso para clientId: ${clientId}`);
+    return result;
   }
 
   @Get()
   @Roles(UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.SUPER_ADMIN, UserRole.CLIENT)
+  @Cacheable({
+    key: 'services:list',
+    ttl: 600, // 10 minutos
+    tags: ['services', 'list'],
+  })
   @ApiOperation({ summary: 'Listar serviços' })
   @ApiResponse({ status: 200, description: 'Lista de serviços' })
   @ApiQuery({ name: 'search', required: false, description: 'Buscar por nome ou descrição' })
@@ -62,16 +81,33 @@ export class ServicesController {
     @Query('search') search?: string,
     @Query('status') status?: string,
   ) {
-    return this.servicesService.findAll(clientId, paginationDto, search, status);
+    this.logger.log(
+      `Listando serviços para clientId: ${clientId}, search: ${search}, status: ${status}`,
+    );
+
+    const result = this.servicesService.findAll(clientId, paginationDto, search, status);
+
+    this.logger.log(`Serviços retornados com sucesso para clientId: ${clientId}`);
+    return result;
   }
 
   @Get(':id')
   @Roles(UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.SUPER_ADMIN, UserRole.CLIENT)
+  @Cacheable({
+    key: 'services:detail',
+    ttl: 600, // 10 minutos
+    tags: ['services', 'detail'],
+  })
   @ApiOperation({ summary: 'Buscar serviço por ID' })
   @ApiResponse({ status: 200, description: 'Serviço encontrado' })
   @ApiResponse({ status: 404, description: 'Serviço não encontrado' })
   findOne(@Param('id') id: string, @Tenant() clientId: string) {
-    return this.servicesService.findOne(clientId, id);
+    this.logger.log(`Buscando serviço ${id} para clientId: ${clientId}`);
+
+    const result = this.servicesService.findOne(clientId, id);
+
+    this.logger.log(`Serviço retornado com sucesso para clientId: ${clientId}`);
+    return result;
   }
 
   @Patch(':id')
@@ -86,21 +122,32 @@ export class ServicesController {
     @Body() updateServiceDto: UpdateServiceDto,
     @Tenant() clientId: string,
   ) {
-    return this.servicesService.update(clientId, id, updateServiceDto);
+    this.logger.log(`Atualizando serviço ${id} para clientId: ${clientId}`);
+    this.logger.debug(`Dados recebidos: ${JSON.stringify(updateServiceDto)}`);
+
+    const result = this.servicesService.update(clientId, id, updateServiceDto);
+
+    this.logger.log(`Serviço atualizado com sucesso para clientId: ${clientId}`);
+    return result;
   }
 
   @Delete(':id')
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Remover serviço' })
-  @ApiResponse({ status: 200, description: 'Serviço removido com sucesso' })
+  @ApiOperation({ summary: 'Deletar serviço' })
+  @ApiResponse({ status: 200, description: 'Serviço deletado com sucesso' })
   @ApiResponse({ status: 404, description: 'Serviço não encontrado' })
-  @ApiResponse({ status: 400, description: 'Serviço possui agendamentos futuros' })
   remove(@Param('id') id: string, @Tenant() clientId: string) {
-    return this.servicesService.remove(clientId, id);
+    this.logger.log(`Deletando serviço ${id} para clientId: ${clientId}`);
+
+    const result = this.servicesService.remove(clientId, id);
+
+    this.logger.log(`Serviço deletado com sucesso para clientId: ${clientId}`);
+    return result;
   }
 
   @Patch(':id/status')
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @CacheInvalidate('services:list')
   @ApiOperation({ summary: 'Atualizar status do serviço' })
   @ApiResponse({ status: 200, description: 'Status atualizado com sucesso' })
   @ApiResponse({ status: 404, description: 'Serviço não encontrado' })
@@ -109,6 +156,28 @@ export class ServicesController {
     @Body('isActive') isActive: boolean,
     @Tenant() clientId: string,
   ) {
-    return this.servicesService.updateStatus(clientId, id, isActive);
+    this.logger.log(
+      `Atualizando status do serviço ${id} para ${isActive} em clientId: ${clientId}`,
+    );
+
+    const result = this.servicesService.updateStatus(clientId, id, isActive);
+
+    this.logger.log(`Status do serviço atualizado com sucesso para clientId: ${clientId}`);
+    return result;
+  }
+
+  @Get('cache/clear')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Limpar cache de serviços' })
+  async clearCache() {
+    await this.cacheService.invalidateByTags(['services']);
+    return { success: true, message: 'Cache de serviços limpo com sucesso' };
+  }
+
+  @Get('cache/stats')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Obter estatísticas do cache de serviços' })
+  async getCacheStats() {
+    return this.cacheService.getStats();
   }
 }

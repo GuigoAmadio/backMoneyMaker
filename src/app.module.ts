@@ -1,6 +1,8 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { PassportModule } from '@nestjs/passport';
+import { JwtModule } from '@nestjs/jwt';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -19,6 +21,19 @@ import { ProductsModule } from './modules/products/products.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { PropertiesModule } from './modules/properties/properties.module';
 import { EcommerceModule } from './modules/ecommerce/ecommerce.module';
+import { LoggerModule } from './common/logger/logger.module';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { LoggerInterceptor } from './common/logger/logger.interceptor';
+import { MetricsModule } from './common/metrics/metrics.module';
+import { MetricsInterceptor } from './common/metrics/metrics.interceptor';
+import { CacheInterceptor } from './common/interceptors/cache.interceptor';
+import { TelegramModule } from './common/notifications/telegram.module';
+import { QueueModule } from './common/queue/queue.module';
+import { CacheModule } from './common/cache/cache.module';
+import { TenantInterceptor } from './common/tenant/tenant.interceptor';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { JwtStrategy } from './modules/auth/strategies/jwt.strategy';
+import { MetricsMiddleware } from './common/metrics/metrics.middleware';
 
 @Module({
   imports: [
@@ -44,6 +59,20 @@ import { EcommerceModule } from './modules/ecommerce/ecommerce.module';
     // Multi-tenancy
     TenantModule,
 
+    // Passport
+    PassportModule,
+
+    // JWT
+    JwtModule.registerAsync({
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET'),
+        signOptions: {
+          expiresIn: configService.get<string>('JWT_EXPIRATION'),
+        },
+      }),
+      inject: [ConfigService],
+    }),
+
     // Módulos de domínio
     AuthModule,
     UsersModule,
@@ -58,8 +87,33 @@ import { EcommerceModule } from './modules/ecommerce/ecommerce.module';
 
     // Ecommerce
     EcommerceModule,
+    LoggerModule,
+    MetricsModule,
+    TelegramModule,
+    QueueModule,
+    CacheModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    JwtAuthGuard,
+    JwtStrategy,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: LoggerInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MetricsInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TenantInterceptor,
+    },
+  ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(MetricsMiddleware).forRoutes('*');
+  }
+}

@@ -1,13 +1,9 @@
-import { Module } from '@nestjs/common';
-import { TenantMiddleware } from './tenant.middleware';
+import { Module, Global } from '@nestjs/common';
 import { TenantService } from './tenant.service';
 
+@Global()
 @Module({
   providers: [TenantService],
   exports: [TenantService],
 })
-export class TenantModule {
-  configure(consumer: any) {
-    consumer.apply(TenantMiddleware).forRoutes('*');
-  }
-}
+export class TenantModule {}

@@ -1,35 +1,36 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { cleanData, cleanFilters } from '../../common/utils/data-cleaner.util';
+import { CacheService } from '../../common/cache/cache.service';
 
 @Injectable()
 export class ProductsService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(ProductsService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private cacheService: CacheService,
+  ) {}
 
   /**
    * Obter estatísticas de produtos
    */
   async getProductStats(clientId: string) {
-    const [
-      totalProducts,
-      totalSoldValue,
-      totalSoldQuantity,
-      lowStockCount,
-      outOfStockCount,
-      averagePrice,
-      monthlyRevenue,
-    ] = await Promise.all([
-      this.prisma.product.count({ where: { clientId } }),
-      this.getTotalSoldValue(clientId),
-      this.getTotalSoldQuantity(clientId),
-      this.prisma.product.count({ where: { clientId, stock: { lte: 10 } } }),
-      this.prisma.product.count({ where: { clientId, stock: 0 } }),
-      this.getAveragePrice(clientId),
-      this.getMonthlyRevenue(clientId),
-    ]);
+    this.logger.log(`Obtendo estatísticas de produtos para clientId: ${clientId}`);
 
-    return {
-      success: true,
-      data: {
+    try {
+      // Tentar obter do cache primeiro
+      const cacheKey = `products:stats:${clientId}`;
+      const cachedStats = await this.cacheService.get(cacheKey);
+
+      if (cachedStats) {
+        this.logger.debug(`Estatísticas de produtos obtidas do cache para clientId: ${clientId}`);
+        return cachedStats;
+      }
+
+      this.logger.log(`Cache miss - coletando estatísticas do banco para clientId: ${clientId}`);
+
+      const [
         totalProducts,
         totalSoldValue,
         totalSoldQuantity,
@@ -37,121 +38,246 @@ export class ProductsService {
         outOfStockCount,
         averagePrice,
         monthlyRevenue,
-        metrics: {
-          productsInStock: totalProducts - outOfStockCount,
-          inventoryValue: await this.getInventoryValue(clientId),
-          topSellingCategory: await this.getTopSellingCategory(clientId),
+      ] = await Promise.all([
+        this.prisma.product.count({ where: { clientId } }),
+        this.getTotalSoldValue(clientId),
+        this.getTotalSoldQuantity(clientId),
+        this.prisma.product.count({ where: { clientId, stock: { lte: 10 } } }),
+        this.prisma.product.count({ where: { clientId, stock: 0 } }),
+        this.getAveragePrice(clientId),
+        this.getMonthlyRevenue(clientId),
+      ]);
+
+      const result = {
+        success: true,
+        data: {
+          totalProducts,
+          totalSoldValue,
+          totalSoldQuantity,
+          lowStockCount,
+          outOfStockCount,
+          averagePrice,
+          monthlyRevenue,
+          metrics: {
+            productsInStock: totalProducts - outOfStockCount,
+            inventoryValue: await this.getInventoryValue(clientId),
+            topSellingCategory: await this.getTopSellingCategory(clientId),
+          },
         },
-      },
-    };
+      };
+
+      // Salvar no cache por 10 minutos
+      await this.cacheService.set(cacheKey, result, clientId, {
+        ttl: 600,
+        tags: ['products', 'stats'],
+      });
+
+      this.logger.log(
+        `Estatísticas de produtos coletadas e cacheadas com sucesso para clientId: ${clientId}`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(`Erro ao obter estatísticas de produtos para clientId: ${clientId}`, error);
+      throw error;
+    }
   }
 
   /**
    * Obter produtos mais vendidos
    */
   async getTopSellingProducts(clientId: string, limit: number = 5) {
-    const topProducts = await this.prisma.orderItem.groupBy({
-      by: ['productId'],
-      where: {
-        order: {
-          clientId,
-          paymentStatus: 'PAID',
-        },
-      },
-      _sum: {
-        quantity: true,
-        subtotal: true,
-      },
-      orderBy: {
-        _sum: {
-          quantity: 'desc',
-        },
-      },
-      take: limit,
-    });
+    this.logger.log(`Obtendo produtos mais vendidos para clientId: ${clientId}, limit: ${limit}`);
 
-    // Buscar detalhes dos produtos
-    const productIds = topProducts.map((item) => item.productId);
-    const products = await this.prisma.product.findMany({
-      where: {
-        id: { in: productIds },
-        clientId,
-      },
-      include: {
-        category: {
-          select: {
-            name: true,
+    try {
+      // Tentar obter do cache primeiro
+      const cacheKey = `products:top-selling:${clientId}:${limit}`;
+      const cachedProducts = await this.cacheService.get(cacheKey);
+
+      if (cachedProducts) {
+        this.logger.debug(`Produtos mais vendidos obtidos do cache para clientId: ${clientId}`);
+        return cachedProducts;
+      }
+
+      this.logger.log(
+        `Cache miss - coletando produtos mais vendidos do banco para clientId: ${clientId}`,
+      );
+
+      const topProducts = await this.prisma.orderItem.groupBy({
+        by: ['productId'],
+        where: {
+          order: {
+            clientId,
+            paymentStatus: 'PAID',
           },
         },
-      },
-    });
+        _sum: {
+          quantity: true,
+          subtotal: true,
+        },
+        orderBy: {
+          _sum: {
+            quantity: 'desc',
+          },
+        },
+        take: limit,
+      });
 
-    // Combinar dados
-    const result = topProducts.map((item) => {
-      const product = products.find((p) => p.id === item.productId);
-      return {
-        id: product?.id,
-        name: product?.name,
-        category: product?.category?.name || 'Sem categoria',
-        price: Number(product?.price) || 0,
-        quantitySold: item._sum.quantity || 0,
-        totalRevenue: Number(item._sum.subtotal) || 0,
-        image: product?.image || null,
+      // Buscar detalhes dos produtos
+      const productIds = topProducts.map((item) => item.productId);
+      const products = await this.prisma.product.findMany({
+        where: {
+          id: { in: productIds },
+          clientId,
+        },
+        include: {
+          category: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      });
+
+      // Combinar dados
+      const result = topProducts.map((item) => {
+        const product = products.find((p) => p.id === item.productId);
+        return {
+          id: product?.id,
+          name: product?.name,
+          category: product?.category?.name || 'Sem categoria',
+          price: Number(product?.price) || 0,
+          quantitySold: item._sum.quantity || 0,
+          totalRevenue: Number(item._sum.subtotal) || 0,
+          image: product?.image || null,
+        };
+      });
+
+      const response = {
+        success: true,
+        data: result,
       };
-    });
 
-    return {
-      success: true,
-      data: result,
-    };
+      // Salvar no cache por 15 minutos
+      await this.cacheService.set(cacheKey, response, clientId, {
+        ttl: 900,
+        tags: ['products', 'top-selling'],
+      });
+
+      this.logger.log(
+        `Produtos mais vendidos coletados e cacheados com sucesso para clientId: ${clientId}`,
+      );
+      return response;
+    } catch (error) {
+      this.logger.error(`Erro ao obter produtos mais vendidos para clientId: ${clientId}`, error);
+      throw error;
+    }
   }
 
   /**
    * Obter produtos com estoque baixo
    */
   async getLowStockProducts(clientId: string, threshold: number = 10) {
-    const products = await this.prisma.product.findMany({
-      where: {
-        clientId,
-        stock: {
-          lte: threshold,
-        },
-      },
-      include: {
-        category: {
-          select: {
-            name: true,
+    this.logger.log(
+      `Obtendo produtos com estoque baixo para clientId: ${clientId}, threshold: ${threshold}`,
+    );
+
+    try {
+      // Tentar obter do cache primeiro
+      const cacheKey = `products:low-stock:${clientId}:${threshold}`;
+      const cachedProducts = await this.cacheService.get(cacheKey);
+
+      if (cachedProducts) {
+        this.logger.debug(`Produtos com estoque baixo obtidos do cache para clientId: ${clientId}`);
+        return cachedProducts;
+      }
+
+      this.logger.log(
+        `Cache miss - coletando produtos com estoque baixo do banco para clientId: ${clientId}`,
+      );
+
+      const products = await this.prisma.product.findMany({
+        where: {
+          clientId,
+          stock: {
+            lte: threshold,
           },
         },
-      },
-      orderBy: {
-        stock: 'asc',
-      },
-    });
+        include: {
+          category: {
+            select: {
+              name: true,
+            },
+          },
+        },
+        orderBy: {
+          stock: 'asc',
+        },
+      });
 
-    return {
-      success: true,
-      data: products.map((product) => ({
-        id: product.id,
-        name: product.name,
-        description: product.description,
-        price: Number(product.price),
-        stock: product.stock,
-        category: product.category?.name || 'Sem categoria',
-        isOutOfStock: product.stock === 0,
-        image: product.image || null,
-      })),
-    };
+      const result = {
+        success: true,
+        data: products.map((product) => ({
+          id: product.id,
+          name: product.name,
+          description: product.description,
+          price: Number(product.price),
+          stock: product.stock,
+          category: product.category?.name || 'Sem categoria',
+          isOutOfStock: product.stock === 0,
+          image: product.image || null,
+        })),
+      };
+
+      // Salvar no cache por 5 minutos
+      await this.cacheService.set(cacheKey, result, clientId, {
+        ttl: 300,
+        tags: ['products', 'low-stock'],
+      });
+
+      this.logger.log(
+        `Produtos com estoque baixo coletados e cacheados com sucesso para clientId: ${clientId}`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Erro ao obter produtos com estoque baixo para clientId: ${clientId}`,
+        error,
+      );
+      throw error;
+    }
   }
 
   /**
    * Listar produtos com filtros
    */
   async findAll(clientId: string, filters: any = {}) {
-    const { category, search, isActive, lowStock, page = 1, limit = 10 } = filters;
+    console.log('🔍 [ProductsService] findAll chamado com:', { clientId, filters });
+
+    const {
+      category,
+      search,
+      isActive,
+      lowStock,
+      minPrice,
+      maxPrice,
+      page = 1,
+      limit = 10,
+    } = filters;
+    console.log('📋 [ProductsService] Filtros extraídos:', {
+      category,
+      search,
+      isActive,
+      lowStock,
+      minPrice,
+      maxPrice,
+      page,
+      limit,
+    });
 
     const where: any = { clientId };
+    console.log('🎯 [ProductsService] Where inicial:', where);
 
+    // Aplicar filtros apenas se não forem undefined
     if (category) where.categoryId = category;
     if (search) {
       where.OR = [
@@ -160,10 +286,23 @@ export class ProductsService {
         { sku: { contains: search, mode: 'insensitive' } },
       ];
     }
-    if (isActive !== undefined) where.isActive = isActive;
-    if (lowStock) {
-      where.stock = { lte: { stock: { gte: 0 } } };
+    // Só aplicar filtro isActive se for explicitamente especificado
+    if (isActive !== undefined && isActive !== null && isActive !== '') {
+      where.isActive = isActive;
     }
+    if (lowStock !== undefined && lowStock !== null && lowStock === true) {
+      where.stock = { lte: 10 }; // Produtos com estoque menor ou igual a 10
+    }
+
+    // Filtros de preço
+    if (minPrice !== undefined && minPrice > 0) {
+      where.price = { ...where.price, gte: minPrice };
+    }
+    if (maxPrice !== undefined && maxPrice > 0) {
+      where.price = { ...where.price, lte: maxPrice };
+    }
+
+    console.log('🔍 [ProductsService] Where final:', JSON.stringify(where, null, 2));
 
     const [products, total] = await Promise.all([
       this.prisma.product.findMany({
@@ -182,6 +321,17 @@ export class ProductsService {
       this.prisma.product.count({ where }),
     ]);
 
+    console.log('📦 [ProductsService] Produtos encontrados:', products.length);
+    console.log('📊 [ProductsService] Total de produtos:', total);
+    console.log(
+      '📋 [ProductsService] Produtos:',
+      JSON.stringify(
+        products.map((p) => ({ id: p.id, name: p.name, clientId: p.clientId })),
+        null,
+        2,
+      ),
+    );
+
     return {
       success: true,
       data: products.map((product) => ({
@@ -198,6 +348,27 @@ export class ProductsService {
         totalPages: Math.ceil(total / limit),
       },
     };
+
+    const result = {
+      success: true,
+      data: products.map((product) => ({
+        ...product,
+        price: Number(product.price),
+        category: product.category?.name || 'Sem categoria',
+        isOutOfStock: product.stock === 0,
+        image: product.image || null,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+
+    console.log('✅ [ProductsService] Retornando resultado:', JSON.stringify(result, null, 2));
+
+    return result;
   }
 
   /**
@@ -268,31 +439,69 @@ export class ProductsService {
    * Criar produto
    */
   async create(data: any, clientId: string) {
-    const product = await this.prisma.product.create({
-      data: {
-        ...data,
-        clientId,
-        price: Number(data.price),
-        stock: Number(data.stock) || 0,
-      },
-      include: {
-        category: {
-          select: {
-            id: true,
-            name: true,
-          },
+    console.log('🔄 [ProductsService] create chamado com:', { data, clientId });
+
+    // Validar dados obrigatórios
+    if (!data.name) {
+      throw new Error('Nome do produto é obrigatório');
+    }
+
+    if (!data.price || isNaN(Number(data.price))) {
+      throw new Error('Preço do produto é obrigatório e deve ser um número válido');
+    }
+
+    // Verificar se a categoria existe se for fornecida
+    if (data.categoryId) {
+      const categoryExists = await this.prisma.category.findFirst({
+        where: {
+          id: data.categoryId,
+          clientId: clientId,
         },
-      },
+      });
+
+      if (!categoryExists) {
+        console.warn('⚠️ [ProductsService] Categoria não encontrada:', data.categoryId);
+        // Não falhar, apenas remover o categoryId
+        delete data.categoryId;
+      }
+    }
+
+    const cleanedData = cleanData({
+      ...data,
+      clientId,
+      price: Number(data.price),
+      stock: Number(data.stock) || 0,
     });
 
-    return {
-      success: true,
-      data: {
-        ...product,
-        price: Number(product.price),
-      },
-      message: 'Produto criado com sucesso',
-    };
+    console.log('🧹 [ProductsService] Dados limpos:', cleanedData);
+
+    try {
+      const product = await this.prisma.product.create({
+        data: cleanedData,
+        include: {
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      console.log('✅ [ProductsService] Produto criado com sucesso:', product);
+
+      return {
+        success: true,
+        data: {
+          ...product,
+          price: Number(product.price),
+        },
+        message: 'Produto criado com sucesso',
+      };
+    } catch (error) {
+      console.error('❌ [ProductsService] Erro ao criar produto:', error);
+      throw error;
+    }
   }
 
   /**
@@ -307,13 +516,11 @@ export class ProductsService {
       throw new NotFoundException('Produto não encontrado');
     }
 
-    const updatedData = { ...data };
-    if (data.price !== undefined) {
-      updatedData.price = Number(data.price);
-    }
-    if (data.stock !== undefined) {
-      updatedData.stock = Number(data.stock);
-    }
+    const updatedData = cleanData({
+      ...data,
+      price: data.price !== undefined ? Number(data.price) : undefined,
+      stock: data.stock !== undefined ? Number(data.stock) : undefined,
+    });
 
     const product = await this.prisma.product.update({
       where: { id },
@@ -350,6 +557,29 @@ export class ProductsService {
       throw new NotFoundException('Produto não encontrado');
     }
 
+    // Verificar se existem pedidos relacionados
+    const relatedOrders = await this.prisma.orderItem.findFirst({
+      where: { productId: id },
+    });
+
+    if (relatedOrders) {
+      throw new Error(
+        'Não é possível excluir este produto pois existem pedidos relacionados. Considere desativar o produto em vez de excluí-lo.',
+      );
+    }
+
+    // Verificar se existem itens do carrinho relacionados
+    const relatedCartItems = await this.prisma.cartItem.findFirst({
+      where: { productId: id },
+    });
+
+    if (relatedCartItems) {
+      throw new Error(
+        'Não é possível excluir este produto pois existem itens no carrinho relacionados. Considere desativar o produto em vez de excluí-lo.',
+      );
+    }
+
+    // Se não há registros relacionados, pode excluir
     await this.prisma.product.delete({
       where: { id },
     });
@@ -372,9 +602,11 @@ export class ProductsService {
       throw new NotFoundException('Produto não encontrado');
     }
 
+    const cleanedData = cleanData({ stock: Number(stock) });
+
     const updatedProduct = await this.prisma.product.update({
       where: { id },
-      data: { stock: Number(stock) },
+      data: cleanedData,
     });
 
     return {
@@ -384,6 +616,30 @@ export class ProductsService {
         price: Number(updatedProduct.price),
       },
       message: 'Estoque atualizado com sucesso',
+    };
+  }
+
+  /**
+   * Desativar produto (alternativa segura à exclusão)
+   */
+  async deactivate(id: string, clientId: string) {
+    const product = await this.prisma.product.findFirst({
+      where: { id, clientId },
+    });
+
+    if (!product) {
+      throw new NotFoundException('Produto não encontrado');
+    }
+
+    // Desativar o produto em vez de excluí-lo
+    await this.prisma.product.update({
+      where: { id },
+      data: { isActive: false },
+    });
+
+    return {
+      success: true,
+      message: 'Produto desativado com sucesso',
     };
   }
 
