@@ -23,8 +23,14 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 # Gerar cliente Prisma
 RUN npx prisma generate
 
+# Verificar se o nest CLI está disponível
+RUN npx nest --version
+
 # Build da aplicação
 RUN npm run build
+
+# Verificar se o build foi criado
+RUN ls -la dist/
 
 # Remover devDependencies após o build
 RUN npm prune --production
