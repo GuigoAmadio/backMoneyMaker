@@ -20,6 +20,58 @@ export class EmployeesService {
     private cacheService: CacheService,
   ) {}
 
+  /**
+   * Obter quantidade de funcionários
+   */
+  async getEmployeesCount(clientId: string, isActive?: boolean) {
+    this.logger.log(
+      `Obtendo quantidade de funcionários para clientId: ${clientId}, isActive: ${isActive}`,
+    );
+
+    try {
+      const where: any = {
+        clientId,
+      };
+
+      if (isActive !== undefined) {
+        where.isActive = isActive;
+      }
+
+      this.logger.debug(`Filtros aplicados: ${JSON.stringify(where)}`);
+
+      const count = await this.prisma.employee.count({ where });
+
+      this.logger.log(`Quantidade de funcionários encontrada: ${count} para clientId: ${clientId}`);
+
+      return {
+        success: true,
+        data: {
+          count,
+        },
+      };
+    } catch (error) {
+      this.logger.error(
+        `Erro ao obter quantidade de funcionários para clientId: ${clientId}`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Obter quantidade de funcionários ativos
+   */
+  async getActiveEmployeesCount(clientId: string) {
+    return this.getEmployeesCount(clientId, true);
+  }
+
+  /**
+   * Obter quantidade de funcionários inativos
+   */
+  async getInactiveEmployeesCount(clientId: string) {
+    return this.getEmployeesCount(clientId, false);
+  }
+
   async create(createEmployeeDto: CreateEmployeeDto, clientId: string) {
     // Verificar se o email já está em uso neste cliente
     const existingEmployee = await this.prisma.employee.findFirst({
@@ -68,9 +120,7 @@ export class EmployeesService {
     search?: string,
     status?: string,
   ): Promise<PaginatedResult<any>> {
-    const { page = 1, limit = 10 } = paginationDto;
-    const skip = Number(page) && Number(limit) ? (Number(page) - 1) * Number(limit) : 0;
-    const take = Number(limit) || 10;
+    const { page = 1, limit } = paginationDto;
 
     const where: any = { clientId };
 
@@ -85,6 +135,47 @@ export class EmployeesService {
     if (status !== undefined) {
       where.isActive = status === 'active';
     }
+
+    // Se limit não for fornecido, retornar todos (sem paginação)
+    if (!limit) {
+      const employees = await this.prisma.employee.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          services: {
+            select: { id: true, name: true, duration: true, price: true },
+          },
+          appointments: {
+            select: { id: true, startTime: true, endTime: true, status: true },
+            where: { startTime: { gte: new Date() } },
+            orderBy: { startTime: 'asc' },
+            take: 3,
+          },
+          _count: {
+            select: {
+              services: true,
+              appointments: true,
+            },
+          },
+        },
+      });
+
+      return {
+        data: employees,
+        meta: {
+          total: employees.length,
+          page: 1,
+          limit: employees.length,
+          totalPages: 1,
+          hasNext: false,
+          hasPrevious: false,
+        },
+      };
+    }
+
+    // Com paginação
+    const skip = (page - 1) * limit;
+    const take = limit;
 
     const [employees, total] = await Promise.all([
       this.prisma.employee.findMany({
@@ -129,6 +220,8 @@ export class EmployeesService {
   }
 
   async findOne(id: string, clientId: string) {
+    this.logger.log(`Service: Buscando funcionário ${id} para clientId: ${clientId}`);
+
     const employee = await this.prisma.employee.findFirst({
       where: { id, clientId },
       include: {
@@ -160,14 +253,20 @@ export class EmployeesService {
       },
     });
 
+    this.logger.log(`Service: Funcionário encontrado:`, employee);
+
     if (!employee) {
+      this.logger.log(`Service: Funcionário não encontrado`);
       throw new NotFoundException('Funcionário não encontrado');
     }
 
-    return {
+    const result = {
       success: true,
       data: employee,
     };
+
+    this.logger.log(`Service: Retornando resultado:`, result);
+    return result;
   }
 
   async update(id: string, updateEmployeeDto: UpdateEmployeeDto, clientId: string) {

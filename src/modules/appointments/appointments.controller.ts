@@ -45,6 +45,38 @@ export class AppointmentsController {
     private readonly cacheService: CacheService,
   ) {}
 
+  @Get('count')
+  @Cacheable({
+    key: 'appointments:count',
+    ttl: 300, // 5 minutos
+    tags: ['appointments', 'count'],
+  })
+  @ApiOperation({ summary: 'Obter quantidade de agendamentos' })
+  @ApiResponse({ status: 200, description: 'Quantidade de agendamentos' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Data inicial (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Data final (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'status', required: false, description: 'Status do agendamento' })
+  async getAppointmentsCount(
+    @Tenant() clientId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('status') status?: string,
+  ) {
+    this.logger.log(
+      `Obtendo quantidade de agendamentos para clientId: ${clientId}, startDate: ${startDate}, endDate: ${endDate}, status: ${status}`,
+    );
+
+    const result = await this.appointmentsService.getAppointmentsCount(
+      clientId,
+      startDate,
+      endDate,
+      status as AppointmentStatus,
+    );
+
+    this.logger.log(`Quantidade de agendamentos retornada com sucesso para clientId: ${clientId}`);
+    return result;
+  }
+
   @Get('calendar')
   @Cacheable({
     key: 'appointments:calendar',

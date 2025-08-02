@@ -15,6 +15,55 @@ export class AppointmentsService {
   ) {}
 
   /**
+   * Obter quantidade de agendamentos com filtros opcionais
+   */
+  async getAppointmentsCount(
+    clientId: string,
+    startDate?: string,
+    endDate?: string,
+    status?: AppointmentStatus,
+  ) {
+    this.logger.log(
+      `Obtendo quantidade de agendamentos para clientId: ${clientId}, startDate: ${startDate}, endDate: ${endDate}, status: ${status}`,
+    );
+
+    try {
+      const where: any = {
+        clientId, // Filtrar por cliente
+      };
+
+      if (startDate || endDate) {
+        where.startTime = {};
+        if (startDate) where.startTime.gte = new Date(startDate);
+        if (endDate) where.startTime.lte = new Date(endDate);
+      }
+
+      if (status) {
+        where.status = status;
+      }
+
+      this.logger.debug(`Filtros aplicados: ${JSON.stringify(where)}`);
+
+      const count = await this.prisma.appointment.count({ where });
+
+      this.logger.log(`Quantidade de agendamentos encontrada: ${count} para clientId: ${clientId}`);
+
+      return {
+        success: true,
+        data: {
+          count,
+        },
+      };
+    } catch (error) {
+      this.logger.error(
+        `Erro ao obter quantidade de agendamentos para clientId: ${clientId}`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Obter agendamentos para o calendário
    */
   async getCalendarAppointments(
@@ -49,8 +98,23 @@ export class AppointmentsService {
       const appointments = await this.prisma.appointment.findMany({
         where,
         include: {
-          service: true,
-          user: true,
+          service: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              duration: true,
+              price: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
+          },
           employee: {
             select: {
               id: true,
@@ -166,8 +230,23 @@ export class AppointmentsService {
           },
         },
         include: {
-          service: true,
-          user: true,
+          service: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              duration: true,
+              price: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
+          },
           employee: {
             select: {
               id: true,
@@ -472,11 +551,22 @@ export class AppointmentsService {
     return {
       success: true,
       data: appointments.map((apt) => ({
-        ...apt,
+        id: apt.id,
+        clientId: apt.clientId,
+        userId: apt.userId,
+        employeeId: apt.employeeId,
+        serviceId: apt.serviceId,
+        startTime: apt.startTime,
+        endTime: apt.endTime,
+        status: apt.status,
+        createdAt: apt.createdAt,
+        updatedAt: apt.updatedAt,
         service: {
           ...apt.service,
           price: Number(apt.service?.price) || 0,
         },
+        user: apt.user,
+        employee: apt.employee,
       })),
       pagination: {
         page,
@@ -532,11 +622,22 @@ export class AppointmentsService {
     return {
       success: true,
       data: {
-        ...appointment,
+        id: appointment.id,
+        clientId: appointment.clientId,
+        userId: appointment.userId,
+        employeeId: appointment.employeeId,
+        serviceId: appointment.serviceId,
+        startTime: appointment.startTime,
+        endTime: appointment.endTime,
+        status: appointment.status,
+        createdAt: appointment.createdAt,
+        updatedAt: appointment.updatedAt,
         service: {
           ...appointment.service,
           price: Number(appointment.service?.price) || 0,
         },
+        user: appointment.user,
+        employee: appointment.employee,
       },
     };
   }
@@ -568,16 +669,37 @@ export class AppointmentsService {
           startTime: new Date(data.startTime),
           endTime: new Date(data.endTime),
           status: data.status || 'SCHEDULED',
-          notes: data.notes,
           clientId: data.clientId,
           userId: data.userId,
           serviceId: data.serviceId,
           employeeId: data.employeeId,
         },
         include: {
-          service: true,
-          user: true,
-          employee: true,
+          service: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              duration: true,
+              price: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
+          },
+          employee: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              position: true,
+            },
+          },
         },
       });
 
@@ -592,7 +714,6 @@ export class AppointmentsService {
           startTime: appointment.startTime,
           endTime: appointment.endTime,
           status: appointment.status,
-          notes: appointment.notes,
         },
         message: 'Agendamento criado com sucesso',
       };
@@ -641,17 +762,36 @@ export class AppointmentsService {
             phone: true,
           },
         },
+        employee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            position: true,
+          },
+        },
       },
     });
 
     return {
       success: true,
       data: {
-        ...appointment,
+        id: appointment.id,
+        clientId: appointment.clientId,
+        userId: appointment.userId,
+        employeeId: appointment.employeeId,
+        serviceId: appointment.serviceId,
+        startTime: appointment.startTime,
+        endTime: appointment.endTime,
+        status: appointment.status,
+        createdAt: appointment.createdAt,
+        updatedAt: appointment.updatedAt,
         service: {
           ...appointment.service,
           price: Number(appointment.service?.price) || 0,
         },
+        user: appointment.user,
+        employee: appointment.employee,
       },
       message: 'Agendamento atualizado com sucesso',
     };
@@ -690,7 +830,18 @@ export class AppointmentsService {
 
     return {
       success: true,
-      data: updatedAppointment,
+      data: {
+        id: updatedAppointment.id,
+        clientId: updatedAppointment.clientId,
+        userId: updatedAppointment.userId,
+        employeeId: updatedAppointment.employeeId,
+        serviceId: updatedAppointment.serviceId,
+        startTime: updatedAppointment.startTime,
+        endTime: updatedAppointment.endTime,
+        status: updatedAppointment.status,
+        createdAt: updatedAppointment.createdAt,
+        updatedAt: updatedAppointment.updatedAt,
+      },
       message: 'Status do agendamento atualizado com sucesso',
     };
   }

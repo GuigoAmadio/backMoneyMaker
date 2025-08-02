@@ -2,11 +2,12 @@ import { Controller, Get, UseGuards, Query } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiSecurity, ApiOperation } from '@nestjs/swagger';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard, UserRole } from '../../common/guards/roles.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Tenant } from '../../common/decorators/tenant.decorator';
 import { Cacheable } from '../../common/decorators/cache.decorator';
 import { CacheService } from '../../common/cache/cache.service';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('Dashboard')
 @Controller({ path: 'dashboard', version: '1' })

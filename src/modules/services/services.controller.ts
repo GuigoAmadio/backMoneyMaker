@@ -24,11 +24,12 @@ import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard, UserRole } from '../../common/guards/roles.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Tenant } from '../../common/decorators/tenant.decorator';
 import { Cacheable, CacheInvalidate } from '../../common/decorators/cache.decorator';
 import { CacheService } from '../../common/cache/cache.service';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('Serviços')
 @Controller({ path: 'services', version: '1' })

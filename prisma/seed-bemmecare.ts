@@ -360,37 +360,31 @@ async function main() {
 
   const appointments = await Promise.all([
     prisma.appointment.upsert({
-      where: {
-        id: 'app-001',
-      },
+      where: { id: 'appointment-1' },
       update: {},
       create: {
-        id: 'app-001',
-        clientId: bemmecare.id,
-        userId: admin.id,
-        employeeId: employees[0].id, // Dr. Carlos Silva
-        serviceId: services[0].id, // Terapia Individual
-        startTime: tomorrow,
+        id: 'appointment-1',
+        startTime: new Date(tomorrow.getTime()),
         endTime: new Date(tomorrow.getTime() + 60 * 60 * 1000), // +1 hora
         status: 'SCHEDULED',
-        notes: 'Primeira sessão de terapia individual',
+        clientId: 'client-1',
+        userId: 'user-1',
+        employeeId: 'employee-1',
+        serviceId: 'service-1',
       },
     }),
     prisma.appointment.upsert({
-      where: {
-        id: 'app-002',
-      },
+      where: { id: 'appointment-2' },
       update: {},
       create: {
-        id: 'app-002',
-        clientId: bemmecare.id,
-        userId: employee.id,
-        employeeId: employees[1].id, // Dra. Ana Santos
-        serviceId: services[1].id, // Terapia de Casal
+        id: 'appointment-2',
         startTime: new Date(tomorrow.getTime() + 2 * 24 * 60 * 60 * 1000), // +2 dias
         endTime: new Date(tomorrow.getTime() + 2 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000), // +90 min
         status: 'SCHEDULED',
-        notes: 'Sessão de terapia de casal',
+        clientId: 'client-2',
+        userId: 'user-2',
+        employeeId: 'employee-2',
+        serviceId: 'service-2',
       },
     }),
   ]);

@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { ValidationPipe, VersioningType, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
@@ -17,6 +17,7 @@ import { MetricsInterceptor } from './common/metrics/metrics.interceptor';
 import { MetricsService } from './common/metrics/metrics.service';
 
 async function bootstrap() {
+  const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
 
   // Configuração de serviços
@@ -73,6 +74,7 @@ async function bootstrap() {
 
   // Prefixo global
   app.setGlobalPrefix('api');
+  logger.log('🌐 Global prefix configurado: /api');
 
   // Pipes globais de validação
   app.useGlobalPipes(
@@ -155,6 +157,10 @@ async function bootstrap() {
 
   // Porta da aplicação
   const port = configService.get('APP_PORT') || 3000;
+  logger.log(`🚀 Aplicação rodando na porta ${port}`);
+  logger.log(`📚 Documentação disponível em: http://localhost:${port}/api/docs`);
+  logger.log(`📊 Métricas disponíveis em: http://localhost:${port}/metrics`);
+  logger.log(`🌍 Ambiente: ${configService.get('NODE_ENV')}`);
 
   // Adicionar endpoint /metrics na raiz para Prometheus (fora do prefixo global)
   // Aguardar a inicialização completa antes de acessar o serviço
@@ -173,11 +179,6 @@ async function bootstrap() {
   });
 
   await app.listen(port);
-
-  console.log(`🚀 Aplicação rodando na porta ${port}`);
-  console.log(`📚 Documentação disponível em: http://localhost:${port}/api/docs`);
-  console.log(`📊 Métricas disponíveis em: http://localhost:${port}/metrics`);
-  console.log(`🌍 Ambiente: ${configService.get('NODE_ENV')}`);
 }
 
 bootstrap();

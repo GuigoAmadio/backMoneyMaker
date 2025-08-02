@@ -1,13 +1,6 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-
-export enum UserRole {
-  SUPER_ADMIN = 'SUPER_ADMIN',
-  ADMIN = 'ADMIN',
-  EMPLOYEE = 'EMPLOYEE',
-  CLIENT = 'CLIENT',
-  GUEST = 'GUEST',
-}
+import { UserRole } from '@prisma/client';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -18,32 +11,17 @@ export class RolesGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    // LOG para debug
-    const request = context.switchToHttp().getRequest();
-    const user = request.user;
-    console.log('[RolesGuard] requiredRoles:', requiredRoles, '| user:', user);
 
     if (!requiredRoles) {
       return true;
     }
 
-    if (!user) {
-      throw new ForbiddenException('Usuário não autenticado');
-    }
+    const request = context.switchToHttp().getRequest();
+    const user = request.user;
 
-    const hasRole = requiredRoles.some((role) => {
-      // SUPER_ADMIN tem acesso a tudo
-      if (user.role === UserRole.SUPER_ADMIN) {
-        return true;
-      }
+    // LOG para debug
+    console.log('[RolesGuard] requiredRoles:', requiredRoles, '| user:', user);
 
-      return user.role === role;
-    });
-
-    if (!hasRole) {
-      throw new ForbiddenException(`Acesso negado. Roles necessárias: ${requiredRoles.join(', ')}`);
-    }
-
-    return true;
+    return requiredRoles.some((role) => user.role === role);
   }
 }

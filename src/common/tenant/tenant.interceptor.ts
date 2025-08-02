@@ -76,6 +76,7 @@ export class TenantInterceptor implements NestInterceptor {
       '/api/v1/orders',
       '/api/v1/products',
       '/api/v1/dashboard',
+      '/api/v1/clients',
     ];
 
     return tenantRequiredPaths.some((tenantPath) => path.startsWith(tenantPath));

@@ -1,14 +1,6 @@
-import {
-  IsEmail,
-  IsString,
-  IsOptional,
-  MinLength,
-  MaxLength,
-  IsEnum,
-  Matches,
-} from 'class-validator';
+import { IsString, IsEmail, IsOptional, MinLength, MaxLength, IsEnum } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { UserRole } from '../../../common/guards/roles.guard';
+import { UserRole } from '@prisma/client';
 
 export class CreateUserDto {
   @ApiProperty({
@@ -27,6 +19,15 @@ export class CreateUserDto {
   @IsEmail()
   email: string;
 
+  @ApiProperty({
+    description: 'Senha do usuário',
+    example: 'senha123',
+    minLength: 6,
+  })
+  @IsString()
+  @MinLength(6)
+  password: string;
+
   @ApiPropertyOptional({
     description: 'Telefone do usuário',
     example: '(11) 99999-9999',
@@ -35,18 +36,6 @@ export class CreateUserDto {
   @IsString()
   phone?: string;
 
-  @ApiProperty({
-    description: 'Senha do usuário (mínimo 8 caracteres)',
-    example: 'MinhaSenh@123',
-  })
-  @IsString()
-  @MinLength(8)
-  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, {
-    message:
-      'Senha deve conter pelo menos: 1 letra minúscula, 1 maiúscula, 1 número e 1 caractere especial',
-  })
-  password: string;
-
   @ApiPropertyOptional({
     description: 'Role do usuário',
     enum: UserRole,
@@ -54,12 +43,5 @@ export class CreateUserDto {
   })
   @IsOptional()
   @IsEnum(UserRole)
-  role?: UserRole;
-
-  @ApiPropertyOptional({
-    description: 'URL do avatar do usuário',
-  })
-  @IsOptional()
-  @IsString()
-  avatar?: string;
+  role?: UserRole = UserRole.CLIENT;
 }

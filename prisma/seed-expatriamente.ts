@@ -165,14 +165,13 @@ async function main() {
 
       await prisma.appointment.create({
         data: {
+          startTime,
+          endTime,
+          status: 'SCHEDULED',
           clientId: client.id,
           userId: clientUser.id,
           employeeId: employee.id,
           serviceId: service.id,
-          startTime,
-          endTime,
-          status: 'SCHEDULED',
-          notes: `Consulta de ${clientUser.name} com ${employee.name}`,
         },
       });
       appointmentCount++;

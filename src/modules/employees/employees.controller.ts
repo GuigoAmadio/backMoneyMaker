@@ -26,6 +26,8 @@ import { Tenant } from '../../common/decorators/tenant.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { Cacheable, CacheInvalidate } from '../../common/decorators/cache.decorator';
 import { CacheService } from '../../common/cache/cache.service';
+import { CreateEmployeeDto } from './dto/create-employee.dto';
+import { UpdateEmployeeDto } from './dto/update-employee.dto';
 
 @ApiTags('Funcionários')
 @Controller({ path: 'employees', version: '1' })
@@ -39,6 +41,69 @@ export class EmployeesController {
     private readonly employeesService: EmployeesService,
     private readonly cacheService: CacheService,
   ) {}
+
+  @Get('count')
+  @Cacheable({
+    key: 'employees:count',
+    ttl: 300, // 5 minutos
+    tags: ['employees', 'count'],
+  })
+  @ApiOperation({ summary: 'Obter quantidade de funcionários' })
+  @ApiResponse({ status: 200, description: 'Quantidade de funcionários' })
+  @ApiQuery({
+    name: 'isActive',
+    required: false,
+    description: 'Filtrar por status ativo (true/false)',
+  })
+  async getEmployeesCount(@Tenant() clientId: string, @Query('isActive') isActive?: string) {
+    this.logger.log(
+      `Obtendo quantidade de funcionários para clientId: ${clientId}, isActive: ${isActive}`,
+    );
+
+    const isActiveBoolean = isActive === undefined ? undefined : isActive === 'true';
+    const result = await this.employeesService.getEmployeesCount(clientId, isActiveBoolean);
+
+    this.logger.log(`Quantidade de funcionários retornada com sucesso para clientId: ${clientId}`);
+    return result;
+  }
+
+  @Get('count/active')
+  @Cacheable({
+    key: 'employees:count:active',
+    ttl: 300, // 5 minutos
+    tags: ['employees', 'count', 'active'],
+  })
+  @ApiOperation({ summary: 'Obter quantidade de funcionários ativos' })
+  @ApiResponse({ status: 200, description: 'Quantidade de funcionários ativos' })
+  async getActiveEmployeesCount(@Tenant() clientId: string) {
+    this.logger.log(`Obtendo quantidade de funcionários ativos para clientId: ${clientId}`);
+
+    const result = await this.employeesService.getActiveEmployeesCount(clientId);
+
+    this.logger.log(
+      `Quantidade de funcionários ativos retornada com sucesso para clientId: ${clientId}`,
+    );
+    return result;
+  }
+
+  @Get('count/inactive')
+  @Cacheable({
+    key: 'employees:count:inactive',
+    ttl: 300, // 5 minutos
+    tags: ['employees', 'count', 'inactive'],
+  })
+  @ApiOperation({ summary: 'Obter quantidade de funcionários inativos' })
+  @ApiResponse({ status: 200, description: 'Quantidade de funcionários inativos' })
+  async getInactiveEmployeesCount(@Tenant() clientId: string) {
+    this.logger.log(`Obtendo quantidade de funcionários inativos para clientId: ${clientId}`);
+
+    const result = await this.employeesService.getInactiveEmployeesCount(clientId);
+
+    this.logger.log(
+      `Quantidade de funcionários inativos retornada com sucesso para clientId: ${clientId}`,
+    );
+    return result;
+  }
 
   @Get('stats')
   @Cacheable({
@@ -68,6 +133,7 @@ export class EmployeesController {
   }
 
   @Get(':id')
+  @Public()
   @Cacheable({
     key: 'employees:detail',
     ttl: 600, // 10 minutos
@@ -78,7 +144,9 @@ export class EmployeesController {
   @ApiResponse({ status: 404, description: 'Funcionário não encontrado' })
   async findOne(@Param('id') id: string, @Tenant() clientId: string) {
     this.logger.log(`Buscando funcionário ${id} para clientId: ${clientId}`);
-    return await this.employeesService.findOne(id, clientId);
+    const result = await this.employeesService.findOne(id, clientId);
+    this.logger.log(`Resultado da busca:`, result);
+    return result;
   }
 
   @Post()
@@ -86,7 +154,7 @@ export class EmployeesController {
   @ApiOperation({ summary: 'Criar novo funcionário' })
   @ApiResponse({ status: 201, description: 'Funcionário criado com sucesso' })
   @ApiResponse({ status: 400, description: 'Dados inválidos' })
-  async create(@Body() createEmployeeDto: any, @Tenant() clientId: string) {
+  async create(@Body() createEmployeeDto: CreateEmployeeDto, @Tenant() clientId: string) {
     this.logger.log(`Criando funcionário para clientId: ${clientId}`);
     const employee = await this.employeesService.create(createEmployeeDto, clientId);
 
@@ -105,7 +173,7 @@ export class EmployeesController {
   @ApiResponse({ status: 404, description: 'Funcionário não encontrado' })
   async update(
     @Param('id') id: string,
-    @Body() updateEmployeeDto: any,
+    @Body() updateEmployeeDto: UpdateEmployeeDto,
     @Tenant() clientId: string,
   ) {
     this.logger.log(`Atualizando funcionário ${id} para clientId: ${clientId}`);
