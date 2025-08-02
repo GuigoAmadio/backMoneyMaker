@@ -1,4 +1,4 @@
-# Dockerfile simplificado para desenvolvimento e produção
+# Dockerfile otimizado para produção
 FROM node:20-alpine
 
 # Instalar dependências do sistema necessárias
@@ -10,8 +10,8 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Instalar dependências
-RUN npm ci
+# Instalar dependências de produção
+RUN npm ci --only=production
 
 # Copiar código fonte
 COPY . .
@@ -23,9 +23,12 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 # Gerar cliente Prisma
 RUN npx prisma generate
 
+# Build da aplicação
+RUN npm run build
+
 # Expor porta
 EXPOSE 3000
 
 # Comando de inicialização
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["npm", "run", "start:dev"] 
+CMD ["npm", "run", "start:prod"] 

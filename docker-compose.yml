@@ -55,8 +55,9 @@ services:
     ports:
       - '${APP_PORT:-3000}:3000'
     environment:
-      JWT_SECRET: 'e96e27377004b123200928ce0abaedb1'
-      JWT_EXPIRATION: '30d'
+      NODE_ENV: ${NODE_ENV:-production}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-30d}
       DATABASE_URL: postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres123}@postgres:5432/${DATABASE_NAME:-moneymaker}
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -66,8 +67,6 @@ services:
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       # Variáveis para Prometheus (caso precise)
       PROMETHEUS_METRICS_PORT: 9091
-      # Outras variáveis customizadas...
-      NODE_ENV: ${NODE_ENV:-development}
     volumes:
       - .:/usr/src/app
       - /usr/src/app/node_modules
