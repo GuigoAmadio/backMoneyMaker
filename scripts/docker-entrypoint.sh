@@ -17,7 +17,7 @@ if [ ! -f "dist/main.js" ]; then
     echo "📋 Conteúdo do diretório dist/:"
     ls -la dist/ || echo "Diretório dist/ não existe"
     echo "🔨 Tentando fazer build novamente..."
-    npm run build
+    npx nest build
     if [ ! -f "dist/main.js" ]; then
         echo "❌ ERRO: Build falhou novamente!"
         exit 1

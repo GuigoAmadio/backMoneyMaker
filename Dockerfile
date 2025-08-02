@@ -32,8 +32,8 @@ RUN npm run build
 # Verificar se o build foi criado
 RUN ls -la dist/
 
-# Remover devDependencies após o build
-RUN npm prune --production
+# Remover apenas algumas devDependencies desnecessárias, mantendo @nestjs/cli
+RUN npm uninstall @types/jest @types/supertest jest eslint eslint-config-prettier eslint-plugin-prettier prettier
 
 # Expor porta
 EXPOSE 3000
