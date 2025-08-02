@@ -10,8 +10,8 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Instalar dependências de produção
-RUN npm ci --only=production
+# Instalar todas as dependências (incluindo dev para build)
+RUN npm ci
 
 # Copiar código fonte
 COPY . .
@@ -25,6 +25,9 @@ RUN npx prisma generate
 
 # Build da aplicação
 RUN npm run build
+
+# Remover devDependencies após o build
+RUN npm prune --production
 
 # Expor porta
 EXPOSE 3000
