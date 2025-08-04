@@ -5,7 +5,7 @@
   "compilerOptions": {
     "deleteOutDir": true,
     "webpack": true,
-    "tsConfigPath": "tsconfig.json"
+    "tsConfigPath": "tsconfig.build.json"
   },
   "projects": {
     "moneymaker-backend": {
@@ -14,8 +14,8 @@
       "entryFile": "main",
       "sourceRoot": "src",
       "compilerOptions": {
-        "tsConfigPath": "tsconfig.json"
+        "tsConfigPath": "tsconfig.build.json"
       }
     }
   }
-} 
+}
