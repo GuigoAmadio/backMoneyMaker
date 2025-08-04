@@ -4,6 +4,7 @@ import { AppointmentStatus } from '@prisma/client';
 import { cleanData } from '../../common/utils/data-cleaner.util';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { CacheService } from '../../common/cache/cache.service';
+import { TelegramService } from '../../common/notifications/telegram.service';
 
 @Injectable()
 export class AppointmentsService {
@@ -12,6 +13,7 @@ export class AppointmentsService {
   constructor(
     private prisma: PrismaService,
     private cacheService: CacheService,
+    private telegramService: TelegramService,
   ) {}
 
   /**
@@ -661,6 +663,18 @@ export class AppointmentsService {
 
       if (hasConflict) {
         this.logger.warn(`Conflito de horário detectado para clientId: ${data.clientId}`);
+        await this.telegramService.sendCustomAlert(
+          'warning',
+          '⚠️ CONFLITO DE HORÁRIO',
+          `Tentativa de criar agendamento com conflito de horário`,
+          {
+            clientId: data.clientId,
+            userId: data.userId,
+            serviceId: data.serviceId,
+            startTime: data.startTime,
+            endTime: data.endTime,
+          },
+        );
         throw new ConflictException('Conflito de horário: já existe um agendamento neste período');
       }
 
@@ -707,6 +721,22 @@ export class AppointmentsService {
         `Agendamento criado com sucesso: ${appointment.id} para clientId: ${data.clientId}`,
       );
 
+      // Notificar criação de agendamento
+      await this.telegramService.sendCustomAlert(
+        'success',
+        '📅 NOVO AGENDAMENTO',
+        `Novo agendamento criado: ${appointment.service?.name || 'Serviço'} - ${appointment.user?.name || 'Cliente'}`,
+        {
+          appointmentId: appointment.id,
+          clientId: data.clientId,
+          serviceName: appointment.service?.name,
+          userName: appointment.user?.name,
+          employeeName: appointment.employee?.name,
+          startTime: appointment.startTime,
+          endTime: appointment.endTime,
+        },
+      );
+
       const result = {
         success: true,
         data: {
@@ -722,6 +752,22 @@ export class AppointmentsService {
       return result;
     } catch (error) {
       this.logger.error(`Erro ao criar agendamento para clientId: ${data.clientId}`, error);
+
+      // Notificar erro crítico se não for ConflictException
+      if (!(error instanceof ConflictException)) {
+        await this.telegramService.sendCustomAlert(
+          'error',
+          '🚨 ERRO AO CRIAR AGENDAMENTO',
+          `Erro crítico ao criar agendamento: ${error.message}`,
+          {
+            clientId: data.clientId,
+            userId: data.userId,
+            serviceId: data.serviceId,
+            error: error.stack,
+          },
+        );
+      }
+
       throw error;
     }
   }
@@ -730,120 +776,250 @@ export class AppointmentsService {
    * Atualizar agendamento
    */
   async update(id: string, clientId: string, data: any) {
-    // Verificar se o appointment pertence ao cliente
-    const existingAppointment = await this.prisma.appointment.findFirst({
-      where: { id, clientId },
-    });
+    try {
+      // Verificar se o appointment pertence ao cliente
+      const existingAppointment = await this.prisma.appointment.findFirst({
+        where: { id, clientId },
+      });
 
-    if (!existingAppointment) {
-      throw new NotFoundException('Agendamento não encontrado');
+      if (!existingAppointment) {
+        await this.telegramService.sendCustomAlert(
+          'warning',
+          '⚠️ AGENDAMENTO NÃO ENCONTRADO',
+          `Tentativa de atualizar agendamento inexistente: ${id}`,
+          { appointmentId: id, clientId, timestamp: new Date() },
+        );
+        throw new NotFoundException('Agendamento não encontrado');
+      }
+
+      const cleanedData = cleanData(data);
+
+      const appointment = await this.prisma.appointment.update({
+        where: { id },
+        data: cleanedData,
+        include: {
+          service: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              duration: true,
+              price: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
+          },
+          employee: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              position: true,
+            },
+          },
+        },
+      });
+
+      // Notificar atualização de agendamento
+      await this.telegramService.sendCustomAlert(
+        'info',
+        '📝 AGENDAMENTO ATUALIZADO',
+        `Agendamento atualizado: ${appointment.service?.name || 'Serviço'} - ${appointment.user?.name || 'Cliente'}`,
+        {
+          appointmentId: appointment.id,
+          clientId,
+          serviceName: appointment.service?.name,
+          userName: appointment.user?.name,
+          employeeName: appointment.employee?.name,
+          status: appointment.status,
+          updatedFields: Object.keys(cleanedData),
+        },
+      );
+
+      return {
+        success: true,
+        data: {
+          id: appointment.id,
+          clientId: appointment.clientId,
+          userId: appointment.userId,
+          employeeId: appointment.employeeId,
+          serviceId: appointment.serviceId,
+          startTime: appointment.startTime,
+          endTime: appointment.endTime,
+          status: appointment.status,
+          createdAt: appointment.createdAt,
+          updatedAt: appointment.updatedAt,
+          service: {
+            ...appointment.service,
+            price: Number(appointment.service?.price) || 0,
+          },
+          user: appointment.user,
+          employee: appointment.employee,
+        },
+        message: 'Agendamento atualizado com sucesso',
+      };
+    } catch (error) {
+      if (!(error instanceof NotFoundException)) {
+        await this.telegramService.sendCustomAlert(
+          'error',
+          '🚨 ERRO AO ATUALIZAR AGENDAMENTO',
+          `Erro crítico ao atualizar agendamento: ${error.message}`,
+          { appointmentId: id, clientId, error: error.stack },
+        );
+      }
+      throw error;
     }
-
-    const cleanedData = cleanData(data);
-
-    const appointment = await this.prisma.appointment.update({
-      where: { id },
-      data: cleanedData,
-      include: {
-        service: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            duration: true,
-            price: true,
-          },
-        },
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-        employee: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            position: true,
-          },
-        },
-      },
-    });
-
-    return {
-      success: true,
-      data: {
-        id: appointment.id,
-        clientId: appointment.clientId,
-        userId: appointment.userId,
-        employeeId: appointment.employeeId,
-        serviceId: appointment.serviceId,
-        startTime: appointment.startTime,
-        endTime: appointment.endTime,
-        status: appointment.status,
-        createdAt: appointment.createdAt,
-        updatedAt: appointment.updatedAt,
-        service: {
-          ...appointment.service,
-          price: Number(appointment.service?.price) || 0,
-        },
-        user: appointment.user,
-        employee: appointment.employee,
-      },
-      message: 'Agendamento atualizado com sucesso',
-    };
   }
 
   /**
    * Deletar agendamento
    */
   async remove(id: string) {
-    const appointment = await this.prisma.appointment.findFirst({
-      where: { id },
-    });
+    try {
+      const appointment = await this.prisma.appointment.findFirst({
+        where: { id },
+        include: {
+          service: { select: { name: true } },
+          user: { select: { name: true } },
+          employee: { select: { name: true } },
+        },
+      });
 
-    if (!appointment) {
-      throw new NotFoundException('Agendamento não encontrado');
+      if (!appointment) {
+        await this.telegramService.sendCustomAlert(
+          'warning',
+          '⚠️ AGENDAMENTO NÃO ENCONTRADO',
+          `Tentativa de deletar agendamento inexistente: ${id}`,
+          { appointmentId: id, timestamp: new Date() },
+        );
+        throw new NotFoundException('Agendamento não encontrado');
+      }
+
+      await this.prisma.appointment.delete({
+        where: { id },
+      });
+
+      // Notificar exclusão de agendamento
+      await this.telegramService.sendCustomAlert(
+        'warning',
+        '🗑️ AGENDAMENTO DELETADO',
+        `Agendamento deletado: ${appointment.service?.name || 'Serviço'} - ${appointment.user?.name || 'Cliente'}`,
+        {
+          appointmentId: id,
+          clientId: appointment.clientId,
+          serviceName: appointment.service?.name,
+          userName: appointment.user?.name,
+          employeeName: appointment.employee?.name,
+          startTime: appointment.startTime,
+          endTime: appointment.endTime,
+        },
+      );
+
+      return {
+        success: true,
+        message: 'Agendamento deletado com sucesso',
+      };
+    } catch (error) {
+      if (!(error instanceof NotFoundException)) {
+        await this.telegramService.sendCustomAlert(
+          'error',
+          '🚨 ERRO AO DELETAR AGENDAMENTO',
+          `Erro crítico ao deletar agendamento: ${error.message}`,
+          { appointmentId: id, error: error.stack },
+        );
+      }
+      throw error;
     }
-
-    await this.prisma.appointment.delete({
-      where: { id },
-    });
-
-    return {
-      success: true,
-      message: 'Agendamento deletado com sucesso',
-    };
   }
 
   /**
    * Atualizar status do agendamento
    */
   async updateStatus(id: string, status: AppointmentStatus) {
-    const updatedAppointment = await this.prisma.appointment.update({
-      where: { id },
-      data: { status },
-    });
+    try {
+      const appointment = await this.prisma.appointment.findFirst({
+        where: { id },
+        include: {
+          service: { select: { name: true } },
+          user: { select: { name: true } },
+          employee: { select: { name: true } },
+        },
+      });
 
-    return {
-      success: true,
-      data: {
-        id: updatedAppointment.id,
-        clientId: updatedAppointment.clientId,
-        userId: updatedAppointment.userId,
-        employeeId: updatedAppointment.employeeId,
-        serviceId: updatedAppointment.serviceId,
-        startTime: updatedAppointment.startTime,
-        endTime: updatedAppointment.endTime,
-        status: updatedAppointment.status,
-        createdAt: updatedAppointment.createdAt,
-        updatedAt: updatedAppointment.updatedAt,
-      },
-      message: 'Status do agendamento atualizado com sucesso',
-    };
+      if (!appointment) {
+        await this.telegramService.sendCustomAlert(
+          'warning',
+          '⚠️ AGENDAMENTO NÃO ENCONTRADO',
+          `Tentativa de atualizar status de agendamento inexistente: ${id}`,
+          { appointmentId: id, status, timestamp: new Date() },
+        );
+        throw new NotFoundException('Agendamento não encontrado');
+      }
+
+      const updatedAppointment = await this.prisma.appointment.update({
+        where: { id },
+        data: { status },
+      });
+
+      // Notificar mudança de status
+      const statusEmoji = {
+        SCHEDULED: '📅',
+        CONFIRMED: '✅',
+        IN_PROGRESS: '🔄',
+        COMPLETED: '🎉',
+        CANCELLED: '❌',
+        NO_SHOW: '⏰',
+      };
+
+      await this.telegramService.sendCustomAlert(
+        'info',
+        `${statusEmoji[status] || '📝'} STATUS ATUALIZADO`,
+        `Status do agendamento alterado para: ${status}`,
+        {
+          appointmentId: id,
+          clientId: appointment.clientId,
+          serviceName: appointment.service?.name,
+          userName: appointment.user?.name,
+          employeeName: appointment.employee?.name,
+          oldStatus: appointment.status,
+          newStatus: status,
+          startTime: appointment.startTime,
+        },
+      );
+
+      return {
+        success: true,
+        data: {
+          id: updatedAppointment.id,
+          clientId: updatedAppointment.clientId,
+          userId: updatedAppointment.userId,
+          employeeId: updatedAppointment.employeeId,
+          serviceId: updatedAppointment.serviceId,
+          startTime: updatedAppointment.startTime,
+          endTime: updatedAppointment.endTime,
+          status: updatedAppointment.status,
+          createdAt: updatedAppointment.createdAt,
+          updatedAt: updatedAppointment.updatedAt,
+        },
+        message: 'Status do agendamento atualizado com sucesso',
+      };
+    } catch (error) {
+      if (!(error instanceof NotFoundException)) {
+        await this.telegramService.sendCustomAlert(
+          'error',
+          '🚨 ERRO AO ATUALIZAR STATUS',
+          `Erro crítico ao atualizar status do agendamento: ${error.message}`,
+          { appointmentId: id, status, error: error.stack },
+        );
+      }
+      throw error;
+    }
   }
 
   /**

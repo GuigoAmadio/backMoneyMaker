@@ -6,12 +6,16 @@ import { UpdateClientDto } from './dto/update-client.dto';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto';
 import { GetClientsDto } from './dto/get-clients.dto';
 import { Logger } from '@nestjs/common';
+import { TelegramService } from '../../common/notifications/telegram.service';
 
 @Injectable()
 export class ClientsService {
   private readonly logger = new Logger(ClientsService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private telegramService: TelegramService,
+  ) {}
 
   /**
    * Criar novo cliente
@@ -19,39 +23,72 @@ export class ClientsService {
   async create(createClientDto: CreateClientDto, clientId: string) {
     this.logger.log(`Service: Criando usuário para clientId: ${clientId}`);
 
-    // Criar um usuário (cliente) dentro do tenant atual
-    const user = await this.prisma.user.create({
-      data: {
-        name: createClientDto.name,
-        email: createClientDto.email,
-        phone: createClientDto.phone,
-        status: createClientDto.status || 'ACTIVE',
-        role: 'CLIENT',
-        password: 'temporary_password_123', // Senha temporária
-        client: {
-          connect: {
-            id: clientId,
+    try {
+      // Criar um usuário (cliente) dentro do tenant atual
+      const user = await this.prisma.user.create({
+        data: {
+          name: createClientDto.name,
+          email: createClientDto.email,
+          phone: createClientDto.phone,
+          status: createClientDto.status || 'ACTIVE',
+          role: 'CLIENT',
+          password: 'temporary_password_123', // Senha temporária
+          client: {
+            connect: {
+              id: clientId,
+            },
           },
         },
-      },
-    });
+      });
 
-    this.logger.log(`Service: Usuário criado com ID: ${user.id}`);
+      this.logger.log(`Service: Usuário criado com ID: ${user.id}`);
 
-    return {
-      success: true,
-      data: {
-        data: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          phone: user.phone,
-          status: user.status,
-          createdAt: user.createdAt.toISOString(),
-          updatedAt: user.updatedAt.toISOString(),
+      // Notificar criação de cliente
+      await this.telegramService.sendCustomAlert(
+        'success',
+        '👤 NOVO CLIENTE CRIADO',
+        `Novo cliente criado: ${user.name} (${user.email})`,
+        {
+          userId: user.id,
+          clientId,
+          userName: user.name,
+          userEmail: user.email,
+          userPhone: user.phone,
+          timestamp: new Date(),
         },
-      },
-    };
+      );
+
+      return {
+        success: true,
+        data: {
+          data: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+            status: user.status,
+            createdAt: user.createdAt.toISOString(),
+            updatedAt: user.updatedAt.toISOString(),
+          },
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Service: Erro ao criar cliente: ${error.message}`);
+
+      await this.telegramService.sendCustomAlert(
+        'error',
+        '🚨 ERRO AO CRIAR CLIENTE',
+        `Erro crítico ao criar cliente: ${error.message}`,
+        {
+          clientId,
+          createClientDto,
+          error: error.stack,
+          timestamp: new Date(),
+        },
+      );
+
+      throw error;
+    }
   }
 
   /**
@@ -226,32 +263,67 @@ export class ClientsService {
   async update(id: string, updateClientDto: UpdateClientDto, clientId: string) {
     this.logger.log(`Service: Atualizando usuário ${id} para clientId: ${clientId}`);
 
-    const user = await this.prisma.user.update({
-      where: { id, clientId },
-      data: {
-        name: updateClientDto.name,
-        email: updateClientDto.email,
-        phone: updateClientDto.phone,
-        status: updateClientDto.status,
-      },
-    });
-
-    this.logger.log(`Service: Usuário atualizado: ${user.id}`);
-
-    return {
-      success: true,
-      data: {
+    try {
+      const user = await this.prisma.user.update({
+        where: { id, clientId },
         data: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          phone: user.phone,
-          status: user.status,
-          createdAt: user.createdAt.toISOString(),
-          updatedAt: user.updatedAt.toISOString(),
+          name: updateClientDto.name,
+          email: updateClientDto.email,
+          phone: updateClientDto.phone,
+          status: updateClientDto.status,
         },
-      },
-    };
+      });
+
+      this.logger.log(`Service: Usuário atualizado: ${user.id}`);
+
+      // Notificar atualização de cliente
+      await this.telegramService.sendCustomAlert(
+        'info',
+        '📝 CLIENTE ATUALIZADO',
+        `Cliente atualizado: ${user.name} (${user.email})`,
+        {
+          userId: user.id,
+          clientId,
+          userName: user.name,
+          userEmail: user.email,
+          userPhone: user.phone,
+          status: user.status,
+          timestamp: new Date(),
+        },
+      );
+
+      return {
+        success: true,
+        data: {
+          data: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+            status: user.status,
+            createdAt: user.createdAt.toISOString(),
+            updatedAt: user.updatedAt.toISOString(),
+          },
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Service: Erro ao atualizar cliente: ${error.message}`);
+
+      await this.telegramService.sendCustomAlert(
+        'error',
+        '🚨 ERRO AO ATUALIZAR CLIENTE',
+        `Erro crítico ao atualizar cliente: ${error.message}`,
+        {
+          userId: id,
+          clientId,
+          updateClientDto,
+          error: error.stack,
+          timestamp: new Date(),
+        },
+      );
+
+      throw error;
+    }
   }
 
   /**
@@ -260,62 +332,96 @@ export class ClientsService {
   async remove(id: string, clientId: string) {
     this.logger.log(`Service: Removendo cliente ${id} para clientId: ${clientId}`);
 
-    // Verificar se cliente existe
-    await this.findOne(id, clientId);
+    try {
+      // Verificar se cliente existe
+      const existingClient = await this.findOne(id, clientId);
+      const clientData = existingClient.data.data;
 
-    // Usar transação para garantir consistência
-    await this.prisma.$transaction(async (tx) => {
-      // 1. Deletar appointments
-      await tx.appointment.deleteMany({
-        where: {
+      // Usar transação para garantir consistência
+      await this.prisma.$transaction(async (tx) => {
+        // 1. Deletar appointments
+        await tx.appointment.deleteMany({
+          where: {
+            userId: id,
+            clientId: clientId,
+          },
+        });
+
+        // 2. Deletar orders
+        await tx.order.deleteMany({
+          where: {
+            userId: id,
+            clientId: clientId,
+          },
+        });
+
+        // 3. Deletar stock movements
+        await tx.stockMovement.deleteMany({
+          where: {
+            userId: id,
+            clientId: clientId,
+          },
+        });
+
+        // 4. Deletar refresh tokens
+        await tx.refreshToken.deleteMany({
+          where: {
+            userId: id,
+          },
+        });
+
+        // 5. Deletar audit logs
+        await tx.auditLog.deleteMany({
+          where: {
+            userId: id,
+            clientId: clientId,
+          },
+        });
+
+        // Por último, deletar o usuário
+        await tx.user.delete({
+          where: { id, clientId },
+        });
+      });
+
+      this.logger.log(`Service: Cliente removido: ${id}`);
+
+      // Notificar remoção de cliente
+      await this.telegramService.sendCustomAlert(
+        'warning',
+        '🗑️ CLIENTE REMOVIDO',
+        `Cliente removido: ${clientData.name} (${clientData.email})`,
+        {
           userId: id,
-          clientId: clientId,
+          clientId,
+          userName: clientData.name,
+          userEmail: clientData.email,
+          userPhone: clientData.phone,
+          timestamp: new Date(),
         },
-      });
+      );
 
-      // 2. Deletar orders
-      await tx.order.deleteMany({
-        where: {
+      return {
+        success: true,
+        message: 'Cliente removido com sucesso',
+      };
+    } catch (error) {
+      this.logger.error(`Service: Erro ao remover cliente: ${error.message}`);
+
+      await this.telegramService.sendCustomAlert(
+        'error',
+        '🚨 ERRO AO REMOVER CLIENTE',
+        `Erro crítico ao remover cliente: ${error.message}`,
+        {
           userId: id,
-          clientId: clientId,
+          clientId,
+          error: error.stack,
+          timestamp: new Date(),
         },
-      });
+      );
 
-      // 3. Deletar stock movements
-      await tx.stockMovement.deleteMany({
-        where: {
-          userId: id,
-          clientId: clientId,
-        },
-      });
-
-      // 4. Deletar refresh tokens
-      await tx.refreshToken.deleteMany({
-        where: {
-          userId: id,
-        },
-      });
-
-      // 5. Deletar audit logs
-      await tx.auditLog.deleteMany({
-        where: {
-          userId: id,
-          clientId: clientId,
-        },
-      });
-
-      // Por último, deletar o usuário
-      await tx.user.delete({
-        where: { id, clientId },
-      });
-    });
-
-    this.logger.log(`Service: Cliente removido: ${id}`);
-
-    return {
-      success: true,
-      message: 'Cliente removido com sucesso',
-    };
+      throw error;
+    }
   }
 
   /**

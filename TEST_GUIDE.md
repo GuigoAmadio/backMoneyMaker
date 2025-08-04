@@ -5,13 +5,12 @@ Este guia explica como testar todas as tecnologias implementadas no backend e ve
 ## 📋 Tecnologias Testadas
 
 1. **🔄 Cache Redis** - Sistema de cache em memória
-2. **📊 Sistema de Filas (Bull)** - Processamento assíncrono
-3. **📱 Notificações Telegram** - Alertas em tempo real
-4. **📈 Métricas Prometheus** - Monitoramento e observabilidade
-5. **🗄️ Banco de Dados (Prisma)** - Persistência de dados
-6. **📝 Logs Winston** - Sistema de logging estruturado
-7. **🏢 Multi-Tenancy** - Sistema multi-cliente
-8. **⚡ Performance** - Testes de velocidade e eficiência
+2. **📱 Notificações Telegram** - Alertas em tempo real
+3. **📈 Métricas Prometheus** - Monitoramento e observabilidade
+4. **🗄️ Banco de Dados (Prisma)** - Persistência de dados
+5. **📝 Logs Winston** - Sistema de logging estruturado
+6. **🏢 Multi-Tenancy** - Sistema multi-cliente
+7. **⚡ Performance** - Testes de velocidade e eficiência
 
 ## 🚀 Como Executar os Testes
 
@@ -47,7 +46,7 @@ npm run test:health
 - ✅ Conectividade básica do servidor
 - ✅ Conexão com banco de dados
 - ✅ Cache Redis funcionando
-- ✅ Sistema de filas operacional
+
 - ✅ Logs Winston ativos
 - ✅ Métricas Prometheus disponíveis
 - ✅ Sistema multi-tenant configurado
@@ -65,21 +64,6 @@ npm run test:redis
 - ✅ Operações de cache (set/get/del)
 - ✅ Expiração automática de chaves
 - ✅ Performance do cache
-
-#### 3. Teste do Sistema de Filas
-
-```bash
-npm run test:queue
-```
-
-**O que testa:**
-
-- ✅ Conexão com Redis para filas
-- ✅ Adição de jobs (simples, com prioridade, com delay)
-- ✅ Processamento de jobs
-- ✅ Estatísticas da fila
-- ✅ Limpeza de jobs antigos
-- ✅ Performance de processamento
 
 #### 4. Teste das Notificações Telegram
 
@@ -136,7 +120,7 @@ Teste completo que verifica a integração entre todas as tecnologias.
 ✅ Servidor respondendo na porta correta
 ✅ Conexão com banco de dados estabelecida
 ✅ Redis conectado com sucesso
-✅ Fila Bull conectada ao Redis
+
 ✅ Job processado com sucesso
 ✅ Logs gerados com sucesso
 ✅ Endpoint de métricas funcionando
@@ -158,7 +142,7 @@ Teste completo que verifica a integração entre todas as tecnologias.
 ```
 ❌ Erro na conexão com banco: Connection refused
 ❌ Erro na conexão com Redis: ECONNREFUSED
-❌ Erro no teste de fila: Queue not ready
+
 ```
 
 ## 🔧 Troubleshooting
@@ -253,13 +237,13 @@ Procure por estes padrões nos logs:
 # Logs de sucesso
 ✅ [HealthCheck] Todas as tecnologias funcionando
 ✅ [Redis] Cache operacional
-✅ [Queue] Jobs processados com sucesso
+
 ✅ [Telegram] Notificação enviada
 
 # Logs de erro
 ❌ [Database] Erro de conexão
 ❌ [Redis] Timeout de conexão
-❌ [Queue] Job falhou
+
 ❌ [Telegram] Token inválido
 ```
 

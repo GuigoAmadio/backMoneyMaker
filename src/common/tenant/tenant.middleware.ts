@@ -53,7 +53,15 @@ export class TenantMiddleware implements NestMiddleware {
   }
 
   private shouldSkipTenantCheck(path: string): boolean {
-    const skipPaths = ['/api/health', '/api/docs', '/api', '/', '/health'];
+    const skipPaths = [
+      '/api/health',
+      '/api/docs',
+      '/api',
+      '/',
+      '/health',
+      '/metrics',
+      '/api/v1/notifications/telegram/public',
+    ];
 
     return skipPaths.some((skipPath) => path.startsWith(skipPath));
   }

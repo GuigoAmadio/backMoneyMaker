@@ -28,12 +28,12 @@ import { MetricsModule } from './common/metrics/metrics.module';
 import { MetricsInterceptor } from './common/metrics/metrics.interceptor';
 import { CacheInterceptor } from './common/interceptors/cache.interceptor';
 import { TelegramModule } from './common/notifications/telegram.module';
-import { QueueModule } from './common/queue/queue.module';
 import { CacheModule } from './common/cache/cache.module';
 import { TenantInterceptor } from './common/tenant/tenant.interceptor';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { JwtStrategy } from './modules/auth/strategies/jwt.strategy';
 import { MetricsMiddleware } from './common/metrics/metrics.middleware';
+import { TelegramSecurityMiddleware } from './common/notifications/telegram.middleware';
 
 @Module({
   imports: [
@@ -90,7 +90,6 @@ import { MetricsMiddleware } from './common/metrics/metrics.middleware';
     LoggerModule,
     MetricsModule,
     TelegramModule,
-    QueueModule,
     CacheModule,
   ],
   controllers: [AppController],
@@ -115,5 +114,6 @@ import { MetricsMiddleware } from './common/metrics/metrics.middleware';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(MetricsMiddleware).forRoutes('*');
+    consumer.apply(TelegramSecurityMiddleware).forRoutes('notifications/telegram/public/*');
   }
 }

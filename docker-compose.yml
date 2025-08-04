@@ -55,7 +55,7 @@ services:
     ports:
       - '${APP_PORT:-3000}:3000'
     environment:
-      NODE_ENV: ${NODE_ENV:-production}
+      NODE_ENV: ${NODE_ENV:-development}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-30d}
       DATABASE_URL: postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres123}@postgres:5432/${DATABASE_NAME:-moneymaker}
@@ -63,8 +63,8 @@ services:
       REDIS_PORT: 6379
       REDIS_DB: 0
       # Variáveis para Telegram
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-8393105211:AAE7_e8KG5cgoe0FZgz6RlGppDefLKopBlg}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-7201413321}
       # Variáveis para Prometheus (caso precise)
       PROMETHEUS_METRICS_PORT: 9091
     volumes:

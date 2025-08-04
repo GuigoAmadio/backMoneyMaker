@@ -13,6 +13,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { TenantService } from '../../common/tenant/tenant.service';
+import { TelegramService } from '../../common/notifications/telegram.service';
 
 @Injectable()
 export class AuthService {
@@ -21,32 +22,19 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private tenantService: TenantService,
+    private telegramService: TelegramService,
   ) {}
 
   /**
    * Validar usuário para estratégia local
    */
   async validateUser(email: string, password: string, clientId?: string) {
-    // Primeira tentativa: buscar usuário com clientId (se fornecido)
-    let user = await this.prisma.user.findFirst({
-      where: {
-        email,
-        ...(clientId && { clientId }),
-        status: 'ACTIVE',
-      },
-      include: {
-        client: {
-          select: { id: true, name: true, status: true },
-        },
-      },
-    });
-
-    // Se não encontrou usuário e há clientId, tentar buscar SUPER_ADMIN sem filtro de clientId
-    if (!user && clientId) {
-      user = await this.prisma.user.findFirst({
+    try {
+      // Primeira tentativa: buscar usuário com clientId (se fornecido)
+      let user = await this.prisma.user.findFirst({
         where: {
           email,
-          role: 'SUPER_ADMIN',
+          ...(clientId && { clientId }),
           status: 'ACTIVE',
         },
         include: {
@@ -55,130 +43,223 @@ export class AuthService {
           },
         },
       });
+
+      // Se não encontrou usuário e há clientId, tentar buscar SUPER_ADMIN sem filtro de clientId
+      if (!user && clientId) {
+        user = await this.prisma.user.findFirst({
+          where: {
+            email,
+            role: 'SUPER_ADMIN',
+            status: 'ACTIVE',
+          },
+          include: {
+            client: {
+              select: { id: true, name: true, status: true },
+            },
+          },
+        });
+      }
+
+      if (!user) {
+        await this.telegramService.sendCustomAlert(
+          'warning',
+          '🔐 TENTATIVA DE LOGIN FALHOU',
+          `Tentativa de login com email inexistente: ${email}`,
+          { email, clientId, timestamp: new Date() },
+        );
+        throw new UnauthorizedException('Credenciais inválidas');
+      }
+
+      // Verificar se a conta não está bloqueada
+      if (user.lockedUntil && user.lockedUntil > new Date()) {
+        await this.telegramService.sendCustomAlert(
+          'warning',
+          '🔒 CONTA BLOQUEADA',
+          `Tentativa de login em conta bloqueada: ${email}`,
+          { email, userId: user.id, clientId, lockedUntil: user.lockedUntil },
+        );
+        throw new UnauthorizedException('Conta temporariamente bloqueada');
+      }
+
+      console.log('[AUTH] Senha recebida:', password);
+      console.log('[AUTH] Senha no banco:', user.password);
+
+      // Verificar senha
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        await this.handleFailedLogin(user.id);
+        await this.telegramService.sendCustomAlert(
+          'warning',
+          '🔐 SENHA INCORRETA',
+          `Tentativa de login com senha incorreta: ${email}`,
+          { email, userId: user.id, clientId, timestamp: new Date() },
+        );
+        throw new UnauthorizedException('Credenciais inválidas');
+      }
+
+      // Resetar tentativas de login falhadas
+      await this.resetFailedLoginAttempts(user.id);
+
+      // Atualizar último login
+      await this.updateLastLogin(user.id);
+
+      // Notificar login bem-sucedido para usuários importantes
+      if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') {
+        await this.telegramService.sendCustomAlert(
+          'success',
+          '✅ LOGIN ADMIN REALIZADO',
+          `Login bem-sucedido de administrador: ${email}`,
+          { email, userId: user.id, role: user.role, clientId, timestamp: new Date() },
+        );
+      }
+
+      const { password: _, ...userWithoutPassword } = user;
+      return userWithoutPassword;
+    } catch (error) {
+      // Se não for UnauthorizedException, notificar erro crítico
+      if (!(error instanceof UnauthorizedException)) {
+        await this.telegramService.sendCustomAlert(
+          'error',
+          '🚨 ERRO CRÍTICO NO AUTH',
+          `Erro durante validação de usuário: ${error.message}`,
+          { email, clientId, error: error.stack, timestamp: new Date() },
+        );
+      }
+      throw error;
     }
-
-    if (!user) {
-      throw new UnauthorizedException('Credenciais inválidas');
-    }
-
-    // Verificar se a conta não está bloqueada
-    if (user.lockedUntil && user.lockedUntil > new Date()) {
-      throw new UnauthorizedException('Conta temporariamente bloqueada');
-    }
-
-    console.log('[AUTH] Senha recebida:', password);
-    console.log('[AUTH] Senha no banco:', user.password);
-
-    // Verificar senha
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      await this.handleFailedLogin(user.id);
-      throw new UnauthorizedException('Credenciais inválidas');
-    }
-
-    // Resetar tentativas de login falhadas
-    await this.resetFailedLoginAttempts(user.id);
-
-    // Atualizar último login
-    await this.updateLastLogin(user.id);
-
-    const { password: _, ...userWithoutPassword } = user;
-    return userWithoutPassword;
   }
 
   /**
    * Registrar novo usuário
    */
   async register(registerDto: RegisterDto, clientId: string) {
-    // Verificar se o cliente existe
-    const clientExists = await this.tenantService.validateClient(clientId);
-    if (!clientExists) {
-      throw new BadRequestException('Cliente inválido');
-    }
+    try {
+      // Verificar se o cliente existe
+      const clientExists = await this.tenantService.validateClient(clientId);
+      if (!clientExists) {
+        await this.telegramService.sendCustomAlert(
+          'error',
+          '🚨 CLIENTE INVÁLIDO',
+          `Tentativa de registro com clientId inválido: ${clientId}`,
+          { clientId, email: registerDto.email, timestamp: new Date() },
+        );
+        throw new BadRequestException('Cliente inválido');
+      }
 
-    // Verificar se email já existe para este cliente
-    const existingUser = await this.prisma.user.findFirst({
-      where: {
-        email: registerDto.email,
-        clientId,
-      },
-    });
-
-    if (existingUser) {
-      throw new ConflictException('Email já cadastrado');
-    }
-
-    // Hash da senha
-    const hashedPassword = await this.hashPassword(registerDto.password);
-
-    // Criar usuário
-    const user = await this.prisma.user.create({
-      data: {
-        ...registerDto,
-        password: hashedPassword,
-        clientId,
-        role: registerDto.role || 'CLIENT',
-      },
-      include: {
-        client: {
-          select: { id: true, name: true, status: true },
+      // Verificar se email já existe para este cliente
+      const existingUser = await this.prisma.user.findFirst({
+        where: {
+          email: registerDto.email,
+          clientId,
         },
-      },
-    });
+      });
 
-    const { password: _, ...userWithoutPassword } = user;
+      if (existingUser) {
+        await this.telegramService.sendCustomAlert(
+          'warning',
+          '⚠️ EMAIL JÁ CADASTRADO',
+          `Tentativa de registro com email existente: ${registerDto.email}`,
+          { email: registerDto.email, clientId, timestamp: new Date() },
+        );
+        throw new ConflictException('Email já cadastrado');
+      }
 
-    // Gerar tokens após registro bem-sucedido
-    const payload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-      clientId: user.clientId,
-    };
+      // Hash da senha
+      const hashedPassword = await this.hashPassword(registerDto.password);
 
-    const accessToken = this.jwtService.sign(payload);
-    const refreshToken = await this.generateRefreshToken(user.id);
+      // Criar usuário
+      const user = await this.prisma.user.create({
+        data: {
+          ...registerDto,
+          password: hashedPassword,
+          clientId,
+          role: registerDto.role || 'CLIENT',
+        },
+        include: {
+          client: {
+            select: { id: true, name: true, status: true },
+          },
+        },
+      });
 
-    return {
-      success: true,
-      message: 'Usuário registrado com sucesso',
-      data: {
-        token: accessToken,
-        client_id: user.clientId,
-        user: userWithoutPassword,
-        refresh_token: refreshToken,
-        expires_in: this.configService.get('JWT_EXPIRATION'),
-      },
-    };
+      const { password: _, ...userWithoutPassword } = user;
+
+      // Gerar tokens após registro bem-sucedido
+      const payload = {
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+        clientId: user.clientId,
+      };
+
+      const accessToken = this.jwtService.sign(payload);
+      const refreshToken = await this.generateRefreshToken(user.id);
+
+      // Notificar registro bem-sucedido
+      await this.telegramService.sendCustomAlert(
+        'success',
+        '✅ NOVO USUÁRIO REGISTRADO',
+        `Novo usuário registrado: ${user.email} (${user.role})`,
+        { email: user.email, role: user.role, clientId, userId: user.id, timestamp: new Date() },
+      );
+
+      return {
+        success: true,
+        message: 'Usuário registrado com sucesso',
+        data: {
+          token: accessToken,
+          client_id: user.clientId,
+          user: userWithoutPassword,
+          refresh_token: refreshToken,
+          expires_in: this.configService.get('JWT_EXPIRATION'),
+        },
+      };
+    } catch (error) {
+      // Se não for BadRequestException ou ConflictException, notificar erro crítico
+      if (!(error instanceof BadRequestException) && !(error instanceof ConflictException)) {
+        await this.telegramService.sendCustomAlert(
+          'error',
+          '🚨 ERRO NO REGISTRO',
+          `Erro durante registro de usuário: ${error.message}`,
+          { email: registerDto.email, clientId, error: error.stack, timestamp: new Date() },
+        );
+      }
+      throw error;
+    }
   }
 
   /**
    * Login do usuário
    */
   async login(loginDto: LoginDto, clientId?: string): Promise<any> {
-    const user = await this.validateUser(loginDto.email, loginDto.password, clientId);
+    try {
+      const user = await this.validateUser(loginDto.email, loginDto.password, clientId);
 
-    const payload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-      clientId: user.clientId,
-    };
+      const payload = {
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+        clientId: user.clientId,
+      };
 
-    const accessToken = this.jwtService.sign(payload);
-    const refreshToken = await this.generateRefreshToken(user.id);
+      const accessToken = this.jwtService.sign(payload);
+      const refreshToken = await this.generateRefreshToken(user.id);
 
-    return {
-      success: true,
-      message: 'Login realizado com sucesso',
-      data: {
-        token: accessToken,
-        client_id: user.clientId,
-        user: user,
-        refresh_token: refreshToken,
-        expires_in: this.configService.get('JWT_EXPIRATION'),
-      },
-    };
+      return {
+        success: true,
+        message: 'Login realizado com sucesso',
+        data: {
+          token: accessToken,
+          client_id: user.clientId,
+          user: user,
+          refresh_token: refreshToken,
+          expires_in: this.configService.get('JWT_EXPIRATION'),
+        },
+      };
+    } catch (error) {
+      // Erro já tratado no validateUser
+      throw error;
+    }
   }
 
   /**

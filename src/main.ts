@@ -4,11 +4,6 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import * as compression from 'compression';
-// Bull Board imports - Temporariamente comentados
-// import { createBullBoard } from '@bull-board/express';
-// import { BullAdapter } from '@bull-board/api';
-// import { ExpressAdapter } from '@bull-board/express';
-// import { getQueueToken } from '@nestjs/bull';
 
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -51,8 +46,13 @@ async function bootstrap() {
     'http://localhost:3001', // BemMeCare frontend
     'http://localhost:3002', // Outros frontends
   ];
+
+  // Em desenvolvimento, permitir todas as origens para facilitar testes
+  const isDevelopment = configService.get('NODE_ENV') === 'development';
+  const allowedOrigins = isDevelopment ? true : corsOrigins;
+
   app.enableCors({
-    origin: corsOrigins,
+    origin: allowedOrigins,
     methods: configService.get('CORS_METHODS') || 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: configService.get('CORS_CREDENTIALS') === 'true' || true, // Habilitar credentials por padrão
     allowedHeaders: [
@@ -130,30 +130,6 @@ async function bootstrap() {
       },
     });
   }
-
-  // Bull Board - Temporariamente comentado devido a problemas de compatibilidade
-  /*
-  const expressAdapter = new ExpressAdapter();
-  expressAdapter.setBasePath('/admin/queues');
-  const defaultQueue = app.get(getQueueToken('default'));
-  createBullBoard({
-    queues: [new BullAdapter(defaultQueue)],
-    serverAdapter: expressAdapter,
-  });
-  app.use(
-    '/admin/queues',
-    (req, res, next) => {
-      // Proteção simples por senha para dev
-      const auth = req.headers.authorization;
-      if (!auth || auth !== 'Bearer devpassword') {
-        res.status(401).send('Unauthorized');
-        return;
-      }
-      next();
-    },
-    expressAdapter.getRouter(),
-  );
-  */
 
   // Porta da aplicação
   const port = configService.get('APP_PORT') || 3000;

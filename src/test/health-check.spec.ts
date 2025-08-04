@@ -9,7 +9,7 @@ import * as request from 'supertest';
 import { AppModule } from '../app.module';
 import { PrismaService } from '../database/prisma.service';
 import { CacheService } from '../common/cache/cache.service';
-import { QueueService } from '../common/queue/queue.service';
+
 import { TelegramService } from '../common/notifications/telegram.service';
 import { MetricsService } from '../common/metrics/metrics.service';
 
@@ -17,7 +17,7 @@ describe('Health Check - Todas as Tecnologias', () => {
   let app: INestApplication;
   let prismaService: PrismaService;
   let cacheService: CacheService;
-  let queueService: QueueService;
+
   let telegramService: TelegramService;
   let metricsService: MetricsService;
 
@@ -32,7 +32,7 @@ describe('Health Check - Todas as Tecnologias', () => {
     // Obter instâncias dos serviços
     prismaService = moduleFixture.get<PrismaService>(PrismaService);
     cacheService = moduleFixture.get<CacheService>(CacheService);
-    queueService = moduleFixture.get<QueueService>(QueueService);
+
     telegramService = moduleFixture.get<TelegramService>(TelegramService);
     metricsService = moduleFixture.get<MetricsService>(MetricsService);
   });
@@ -175,43 +175,6 @@ describe('Health Check - Todas as Tecnologias', () => {
     });
   });
 
-  describe('4. Teste do Sistema de Filas (Bull)', () => {
-    it('deve conectar ao Redis para filas', async () => {
-      try {
-        // Verificar se o serviço está disponível
-        expect(queueService).toBeDefined();
-        console.log('✅ Serviço de filas disponível');
-      } catch (error) {
-        console.error('❌ Erro na conexão com fila:', error);
-        throw error;
-      }
-    });
-
-    it('deve conseguir adicionar jobs na fila', async () => {
-      try {
-        const testJob = {
-          tipo: 'test',
-          payload: { message: 'teste de fila', timestamp: Date.now() },
-        };
-
-        const job = await queueService.addJob(testJob);
-        expect(job.id).toBeDefined();
-        console.log('✅ Job adicionado na fila com sucesso');
-
-        // Aguardar processamento
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-
-        // Verificar se foi processado
-        const jobResult = await job.finished();
-        expect(jobResult).toBe(true);
-        console.log('✅ Job processado com sucesso');
-      } catch (error) {
-        console.error('❌ Erro no teste de fila:', error);
-        throw error;
-      }
-    });
-  });
-
   describe('5. Teste do Sistema de Logs (Winston)', () => {
     it('deve conseguir gerar logs', async () => {
       try {
@@ -269,25 +232,6 @@ describe('Health Check - Todas as Tecnologias', () => {
         }
       } catch (error) {
         console.log('⚠️ Telegram não configurado:', error.message);
-      }
-    });
-
-    it('deve conseguir enviar notificação via fila', async () => {
-      try {
-        const testJob = {
-          tipo: 'telegram',
-          payload: {
-            chatId: 'test',
-            message: 'Teste de notificação via fila - Health Check',
-          },
-        };
-
-        const job = await queueService.addJob(testJob);
-        expect(job.id).toBeDefined();
-        console.log('✅ Notificação Telegram adicionada na fila');
-      } catch (error) {
-        console.error('❌ Erro no teste de notificação:', error);
-        throw error;
       }
     });
   });

@@ -9,6 +9,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 import { UsersModule } from '../users/users.module';
 import { TenantModule } from '../../common/tenant/tenant.module';
+import { TelegramService } from '../../common/notifications/telegram.service';
 
 @Module({
   imports: [
@@ -26,7 +27,7 @@ import { TenantModule } from '../../common/tenant/tenant.module';
     TenantModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, LocalStrategy],
+  providers: [AuthService, JwtStrategy, LocalStrategy, TelegramService],
   exports: [AuthService],
 })
 export class AuthModule {}
