@@ -55,7 +55,7 @@ services:
     ports:
       - '${APP_PORT:-3000}:3000'
     environment:
-      NODE_ENV: ${NODE_ENV:-development}
+      NODE_ENV: ${NODE_ENV:-production}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-30d}
       DATABASE_URL: postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres123}@postgres:5432/${DATABASE_NAME:-moneymaker}
