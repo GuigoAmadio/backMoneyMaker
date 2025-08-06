@@ -140,7 +140,7 @@ export class EmployeesService {
     if (!limit) {
       const employees = await this.prisma.employee.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'asc' },
         include: {
           services: {
             select: { id: true, name: true, duration: true, price: true },
@@ -182,7 +182,7 @@ export class EmployeesService {
         where,
         skip,
         take,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'asc' },
         include: {
           services: {
             select: { id: true, name: true, duration: true, price: true },

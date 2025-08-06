@@ -39,7 +39,7 @@ import { TelegramSecurityMiddleware } from './common/notifications/telegram.midd
     // Configurações
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: ['.env.production'],
     }),
 
     // Rate limiting

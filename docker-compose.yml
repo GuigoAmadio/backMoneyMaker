@@ -3,9 +3,9 @@ services:
     image: postgres:15-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DATABASE_NAME:-moneymaker}
-      POSTGRES_USER: ${DATABASE_USER:-postgres}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres123}
+      POSTGRES_DB: ${DATABASE_NAME:-moneymaker_prod}
+      POSTGRES_USER: ${DATABASE_USER:-moneymaker_user}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-ljZccQ+Y5DRBr4ljJnXqBdNatdX3BvwPSqaZbZ0tAjs=}
     ports:
       - '${DATABASE_PORT:-5432}:5432'
     volumes:
@@ -56,7 +56,7 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-30d}
-      DATABASE_URL: postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres123}@postgres:5432/${DATABASE_NAME:-moneymaker}
+      DATABASE_URL: postgresql://${DATABASE_USER:-moneymaker_user}:${DATABASE_PASSWORD:-ljZccQ+Y5DRBr4ljJnXqBdNatdX3BvwPSqaZbZ0tAjs=}@postgres:5432/${DATABASE_NAME:-moneymaker_prod}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 0
