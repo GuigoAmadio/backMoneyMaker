@@ -41,7 +41,10 @@
     "test:performance": "ts-node scripts/performance-tests.ts",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f"
+    "docker:logs": "docker-compose logs -f",
+    "prisma:seed-expatriamente": "ts-node prisma/seed-expatriamente-updated.ts",
+    "prisma:seed-expatriamente-users": "ts-node prisma/seed-expatriamente-users.ts",
+    "prisma:set-passwords": "ts-node prisma/set-default-passwords.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",

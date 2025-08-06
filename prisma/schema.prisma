@@ -98,6 +98,7 @@ model Employee {
   position     String
   description  String?
   workingHours Json          @default("{}")
+  password     String?       // Nova coluna opcional
   isActive     Boolean       @default(true)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt

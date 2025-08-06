@@ -21,7 +21,6 @@ import { ProductsModule } from './modules/products/products.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { PropertiesModule } from './modules/properties/properties.module';
 import { EcommerceModule } from './modules/ecommerce/ecommerce.module';
-import { LoggerModule } from './common/logger/logger.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { LoggerInterceptor } from './common/logger/logger.interceptor';
 import { MetricsModule } from './common/metrics/metrics.module';
@@ -87,7 +86,6 @@ import { TelegramSecurityMiddleware } from './common/notifications/telegram.midd
 
     // Ecommerce
     EcommerceModule,
-    LoggerModule,
     MetricsModule,
     TelegramModule,
     CacheModule,

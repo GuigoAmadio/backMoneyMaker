@@ -8,6 +8,7 @@ import {
   Req,
   Get,
   Logger,
+  Put,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiHeader } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
@@ -21,6 +22,9 @@ import { LoginResponseDto } from './dto/login-response.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { Tenant } from '../../common/decorators/tenant.decorator';
 import { AuthGuard } from '@nestjs/passport';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { UpdateCredentialsDto } from './dto/update-credentials.dto';
+import { TelegramService } from '../../common/notifications/telegram.service';
 
 @ApiTags('Autenticação')
 @Controller({ path: 'auth', version: '1' })
@@ -28,7 +32,10 @@ import { AuthGuard } from '@nestjs/passport';
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
 
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private telegramService: TelegramService,
+  ) {}
 
   @Public()
   @Post('register')
@@ -106,7 +113,7 @@ export class AuthController {
     status: 401,
     description: 'Token inválido ou expirado',
   })
-  async getProfile(@Req() req: Request) {
+  async getProfile(@Req() req: any) {
     const userId = (req.user as any)?.id || 'unknown';
     this.logger.log(`Perfil solicitado para usuário: ${userId}`);
     try {
@@ -146,5 +153,62 @@ export class AuthController {
   })
   async logout(@Body() refreshTokenDto: RefreshTokenDto) {
     await this.authService.logout(refreshTokenDto.refreshToken);
+  }
+
+  @Public()
+  @Get('test-telegram')
+  @ApiOperation({ summary: 'Testar notificação do Telegram' })
+  @ApiResponse({
+    status: 200,
+    description: 'Teste do Telegram realizado',
+  })
+  async testTelegram() {
+    this.logger.log('Testando notificação do Telegram...');
+    try {
+      await this.telegramService.sendCustomAlert(
+        'info',
+        '🧪 TESTE DE NOTIFICAÇÃO',
+        'Teste de notificação do Telegram para atualização de credenciais',
+        {
+          test: true,
+          timestamp: new Date(),
+          source: 'auth_controller',
+        },
+      );
+      this.logger.log('Teste do Telegram realizado com sucesso');
+      return { success: true, message: 'Notificação do Telegram enviada com sucesso' };
+    } catch (error) {
+      this.logger.error('Erro no teste do Telegram:', error);
+      return { success: false, message: `Erro: ${error.message}` };
+    }
+  }
+
+  @Put('update-credentials')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Atualizar credenciais do usuário' })
+  @ApiResponse({
+    status: 200,
+    description: 'Credenciais atualizadas com sucesso',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Token inválido ou expirado',
+  })
+  async updateCredentials(
+    @Req() req: any,
+    @Body() updateCredentialsDto: UpdateCredentialsDto,
+    @Tenant() clientId: string,
+  ) {
+    this.logger.log(`updateCredentials iniciado`);
+    this.logger.log(`Usuário: ${req.user.id} (${req.user.email})`);
+    this.logger.log(`Role: ${req.user.role}`);
+    this.logger.log(`ClientId: ${clientId}`);
+    this.logger.log(`Dados recebidos: ${JSON.stringify(updateCredentialsDto)}`);
+
+    const result = await this.authService.updateCredentials(req.user.id, updateCredentialsDto);
+
+    this.logger.log(`updateCredentials concluído com sucesso`);
+    return result;
   }
 }

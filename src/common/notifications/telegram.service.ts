@@ -18,6 +18,7 @@ export class TelegramService implements OnModuleInit {
   private chatId: string;
   private isEnabled: boolean;
   private startTime: number;
+  private instanceId: string;
 
   // Rate limiting e circuit breaker
   private messageQueue: Array<{ timestamp: number; message: string }> = [];
@@ -41,7 +42,8 @@ export class TelegramService implements OnModuleInit {
   };
 
   constructor(private configService: ConfigService) {
-    this.logger.log('TelegramService: Inicializando...');
+    this.instanceId = Math.random().toString(36).substr(2, 9);
+    this.logger.log(`TelegramService: Inicializando... (ID: ${this.instanceId})`);
     this.startTime = Date.now();
     // Inicialização assíncrona movida para onModuleInit
   }
@@ -68,30 +70,71 @@ export class TelegramService implements OnModuleInit {
       return false;
     }
 
-    try {
-      // Validar token
-      const tempBot = new (TelegramBot as any)(token, {
-        polling: false,
-        webHook: false,
-      });
+    // Tentar inicializar com retry e timeouts maiores
+    const maxRetries = 3;
+    const baseDelay = 2000; // 2 segundos
 
-      const me = await tempBot.getMe();
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        this.logger.log(`TelegramService: Tentativa ${attempt}/${maxRetries} de inicialização...`);
 
-      // Validar chat ID
-      await tempBot.sendChatAction(chatId, 'typing');
+        // Configurar bot com timeouts maiores
+        const tempBot = new (TelegramBot as any)(token, {
+          polling: false,
+          webHook: false,
+          // Timeouts mais generosos para redes lentas
+          request: {
+            timeout: 30000, // 30 segundos (padrão é 10s)
+            connect_timeout: 15000, // 15 segundos para conectar
+            read_timeout: 30000, // 30 segundos para ler resposta
+          },
+        });
 
-      this.bot = tempBot;
-      this.chatId = chatId;
-      this.isEnabled = true;
+        // Validar token com timeout
+        this.logger.log(`TelegramService: Validando token...`);
+        const me = await Promise.race([
+          tempBot.getMe(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout ao validar token')), 30000),
+          ),
+        ]);
 
-      this.logger.log(`Telegram: Bot ${me.first_name} (@${me.username}) inicializado com sucesso`);
-      return true;
-    } catch (error) {
-      this.logger.error('Telegram: Falha na inicialização:', error);
-      this.isEnabled = false;
-      this.lastError = error;
-      return false;
+        // Validar chat ID com timeout
+        this.logger.log(`TelegramService: Validando chat ID...`);
+        await Promise.race([
+          tempBot.sendChatAction(chatId, 'typing'),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout ao validar chat ID')), 30000),
+          ),
+        ]);
+
+        // Se chegou até aqui, tudo funcionou
+        this.bot = tempBot;
+        this.chatId = chatId;
+        this.isEnabled = true;
+
+        this.logger.log(
+          `Telegram: Bot ${me.first_name} (@${me.username}) inicializado com sucesso na tentativa ${attempt}`,
+        );
+        return true;
+      } catch (error) {
+        this.logger.warn(`TelegramService: Tentativa ${attempt} falhou: ${error.message}`);
+
+        if (attempt === maxRetries) {
+          this.logger.error('Telegram: Todas as tentativas falharam. Notifications disabled.');
+          this.isEnabled = false;
+          this.lastError = error;
+          return false;
+        }
+
+        // Aguardar antes da próxima tentativa (backoff exponencial)
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        this.logger.log(`TelegramService: Aguardando ${delay}ms antes da próxima tentativa...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
     }
+
+    return false;
   }
 
   private async checkRateLimit(): Promise<boolean> {
@@ -182,59 +225,52 @@ export class TelegramService implements OnModuleInit {
     return true;
   }
 
-  private async sendWithRetry(message: string, maxRetries = 3, baseDelay = 1000): Promise<void> {
-    const startTime = Date.now();
-
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
+  private async sendWithRetry(message: string, maxRetries = 3, baseDelay = 2000): Promise<void> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        await this.bot.sendMessage(this.chatId, message, {
-          parse_mode: 'HTML',
-          disable_web_page_preview: true,
-        });
+        this.logger.log(`TelegramService: Tentativa ${attempt}/${maxRetries} de envio...`);
 
-        // Registrar sucesso
-        const responseTime = Date.now() - startTime;
+        // Enviar com timeout
+        await Promise.race([
+          this.bot.sendMessage(this.chatId, message, { parse_mode: 'HTML' }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout ao enviar mensagem')), 30000),
+          ),
+        ]);
+
+        // Sucesso
         this.metrics.messagesSent++;
         this.metrics.lastMessageTime = Date.now();
-        this.metrics.totalResponseTime += responseTime;
-        this.metrics.averageResponseTime =
-          this.metrics.totalResponseTime / this.metrics.messagesSent;
-        this.consecutiveFailures = 0;
+        this.consecutiveFailures = 0; // Resetar falhas consecutivas
 
-        this.messageQueue.push({
-          timestamp: Date.now(),
-          message: message.substring(0, 50), // Log parcial
-        });
-
-        this.logger.log(`Telegram alert sent: ${responseTime}ms`);
+        this.logger.log(`TelegramService: Mensagem enviada com sucesso na tentativa ${attempt}`);
         return;
       } catch (error) {
-        this.metrics.errors++;
-        this.consecutiveFailures++;
-        this.lastError = error;
+        this.logger.warn(`TelegramService: Tentativa ${attempt} falhou: ${error.message}`);
 
-        // Tratamento específico para erros conhecidos
-        if (this.isUserBlockedError(error)) {
-          this.logger.warn('Telegram: Usuário bloqueou o bot');
-          this.metrics.userBlocked++;
-          return; // Não tentar novamente
-        }
-
-        if (attempt === maxRetries - 1) {
-          this.logger.error('Telegram: Falha após todas as tentativas:', error);
+        if (attempt === maxRetries) {
+          this.logger.error('TelegramService: Todas as tentativas de envio falharam');
+          this.metrics.errors++;
+          this.consecutiveFailures++;
           throw error;
         }
 
-        // Backoff exponencial
-        const delay = baseDelay * Math.pow(2, attempt);
-        this.logger.warn(`Telegram: Tentativa ${attempt + 1} falhou, aguardando ${delay}ms`);
+        // Aguardar antes da próxima tentativa
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        this.logger.log(`TelegramService: Aguardando ${delay}ms antes da próxima tentativa...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
   }
 
   async sendAlert(alert: TelegramAlert): Promise<void> {
-    if (!this.isEnabled || !this.bot) {
+    this.logger.log(`🔔 [Telegram] sendAlert chamado - Instância: ${this.instanceId}`);
+    this.logger.log(`🔔 [Telegram] isEnabled: ${this.isEnabled}, bot: ${this.bot ? 'SIM' : 'NÃO'}`);
+
+    // Garantir que o bot está inicializado antes de tentar enviar
+    const isReady = await this.ensureBotInitialized();
+
+    if (!isReady) {
       this.logger.debug('Telegram notifications disabled');
       return;
     }
@@ -585,5 +621,15 @@ export class TelegramService implements OnModuleInit {
     this.circuitBreakerOpen = false;
     this.messageQueue = [];
     this.lastError = null;
+  }
+
+  private async ensureBotInitialized(): Promise<boolean> {
+    if (this.isEnabled && this.bot) {
+      return true;
+    }
+
+    // Se não está inicializado, tentar inicializar agora
+    this.logger.log('TelegramService: Bot não inicializado, tentando inicializar...');
+    return await this.initializeBot();
   }
 }

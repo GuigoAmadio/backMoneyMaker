@@ -27,7 +27,7 @@ RUN npx prisma generate
 RUN npx nest --version
 
 # Build da aplicação
-RUN npm run build:clean
+RUN npm run build
 
 # Verificar se o build foi criado
 RUN ls -la dist/

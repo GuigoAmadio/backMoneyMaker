@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   BadRequestException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -14,9 +15,12 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { TenantService } from '../../common/tenant/tenant.service';
 import { TelegramService } from '../../common/notifications/telegram.service';
+import { UpdateCredentialsDto } from './dto/update-credentials.dto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
@@ -104,7 +108,7 @@ export class AuthService {
       await this.updateLastLogin(user.id);
 
       // Notificar login bem-sucedido para usuários importantes
-      if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') {
+      if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'EMPLOYEE') {
         await this.telegramService.sendCustomAlert(
           'success',
           '✅ LOGIN ADMIN REALIZADO',
@@ -416,4 +420,189 @@ export class AuthService {
       },
     });
   }
+
+  // ... existing code ...
+
+  async updateCredentials(userId: string, updateCredentialsDto: UpdateCredentialsDto) {
+    this.logger.log(`updateCredentials iniciado para usuário: ${userId}`);
+
+    const { email, password } = updateCredentialsDto;
+    this.logger.log(`Novo email: ${email}`);
+
+    try {
+      // Verificar se o email já está em uso por outro usuário
+      this.logger.log(`Verificando se email já está em uso`);
+      const existingUser = await this.prisma.user.findFirst({
+        where: {
+          email: email,
+          id: { not: userId },
+        },
+      });
+
+      if (existingUser) {
+        this.logger.error(`Email já está em uso: ${email}`);
+
+        // Enviar notificação de falha para funcionários
+        this.logger.log(`🔔 [Telegram] ===== INÍCIO DO PROCESSO DE NOTIFICAÇÃO DE FALHA =====`);
+        this.logger.log(`🔔 [Telegram] Email já está em uso, enviando notificação de falha...`);
+
+        try {
+          await this.sendUpdateCredentialsFailureNotification(userId, 'Email já está em uso', {
+            email,
+          });
+          this.logger.log(`🔔 [Telegram] Notificação de falha enviada com sucesso`);
+        } catch (notificationError) {
+          this.logger.error('Erro ao enviar notificação de falha:', notificationError);
+        }
+
+        this.logger.log(`🔔 [Telegram] Lançando exceção: Email já está em uso`);
+        throw new BadRequestException('Email já está em uso');
+      }
+
+      this.logger.log(`Email disponível, fazendo hash da senha`);
+      // Hash da nova senha
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Atualizar usuário
+      this.logger.log(`Atualizando usuário no banco`);
+      const updatedUser = await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          email: email,
+          password: hashedPassword,
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
+      });
+
+      // Remover senha da resposta
+      const { password: _, ...userWithoutPassword } = updatedUser;
+
+      this.logger.log(`Credenciais atualizadas com sucesso para usuário: ${userId}`);
+
+      // Enviar notificação do Telegram para funcionários
+      this.logger.log(`🔔 [Telegram] ===== INÍCIO DO PROCESSO DE NOTIFICAÇÃO =====`);
+      this.logger.log(`🔔 [Telegram] Iniciando processo de notificação para usuário: ${userId}`);
+
+      try {
+        this.logger.log(
+          `🔔 [Telegram] Tentando enviar notificação de sucesso para usuário: ${userId}`,
+        );
+
+        this.logger.log(`🔔 [Telegram] Buscando usuário no banco de dados...`);
+        const user = await this.prisma.user.findUnique({
+          where: { id: userId },
+          include: { client: true },
+        });
+
+        this.logger.log(`🔔 [Telegram] Usuário encontrado: ${user ? 'SIM' : 'NÃO'}`);
+        this.logger.log(`🔔 [Telegram] Role do usuário: ${user?.role}`);
+
+        if (user && user.role === 'EMPLOYEE') {
+          this.logger.log(
+            `🔔 [Telegram] Enviando notificação de sucesso para funcionário: ${user.name}`,
+          );
+
+          this.logger.log(`🔔 [Telegram] Chamando telegramService.sendCustomAlert...`);
+          await this.telegramService.sendCustomAlert(
+            'success',
+            '🔐 CREDENCIAIS ATUALIZADAS',
+            `Funcionário atualizou suas credenciais de acesso`,
+            {
+              userId: user.id,
+              userName: user.name,
+              userEmail: user.email,
+              clientName: user.client?.name || 'N/A',
+              clientId: user.clientId,
+              timestamp: new Date(),
+              action: 'update_credentials',
+            },
+          );
+
+          this.logger.log(`🔔 [Telegram] Notificação de sucesso enviada com sucesso`);
+        } else {
+          this.logger.log(`🔔 [Telegram] Usuário não é funcionário ou não encontrado`);
+        }
+      } catch (error) {
+        this.logger.error('Erro ao enviar notificação do Telegram:', error);
+        this.logger.error('Stack trace:', error.stack);
+        // Não falhar a operação se a notificação falhar
+      }
+
+      return {
+        success: true,
+        message: 'Credenciais atualizadas com sucesso',
+        user: userWithoutPassword,
+      };
+    } catch (error) {
+      this.logger.error(`Erro ao atualizar credenciais para usuário ${userId}:`, error);
+
+      // Enviar notificação de falha para funcionários
+      await this.sendUpdateCredentialsFailureNotification(userId, error.message, {
+        email,
+        error: error.message,
+        stack: error.stack,
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Enviar notificação de falha na atualização de credenciais
+   */
+  private async sendUpdateCredentialsFailureNotification(
+    userId: string,
+    errorMessage: string,
+    details?: any,
+  ) {
+    this.logger.log(
+      `🔔 [Telegram] Iniciando processo de notificação de falha para usuário: ${userId}`,
+    );
+
+    try {
+      this.logger.log(`🔔 [Telegram] Tentando enviar notificação de falha para usuário: ${userId}`);
+
+      this.logger.log(`🔔 [Telegram] Buscando usuário no banco de dados...`);
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        include: { client: true },
+      });
+
+      this.logger.log(`🔔 [Telegram] Usuário encontrado: ${user ? 'SIM' : 'NÃO'}`);
+      this.logger.log(`🔔 [Telegram] Role do usuário: ${user?.role}`);
+
+      if (user && user.role === 'EMPLOYEE') {
+        this.logger.log(`🔔 [Telegram] Enviando notificação para funcionário: ${user.name}`);
+
+        this.logger.log(`🔔 [Telegram] Chamando telegramService.sendCustomAlert...`);
+        await this.telegramService.sendCustomAlert(
+          'error',
+          '❌ FALHA NA ATUALIZAÇÃO DE CREDENCIAIS',
+          `Erro ao atualizar credenciais do funcionário`,
+          {
+            userId: user.id,
+            userName: user.name,
+            userEmail: user.email,
+            clientName: user.client?.name || 'N/A',
+            clientId: user.clientId,
+            errorMessage,
+            timestamp: new Date(),
+            action: 'update_credentials_failed',
+            ...details,
+          },
+        );
+
+        this.logger.log(`🔔 [Telegram] Notificação enviada com sucesso`);
+      } else {
+        this.logger.log(`🔔 [Telegram] Usuário não é funcionário ou não encontrado`);
+      }
+    } catch (notificationError) {
+      this.logger.error('Erro ao enviar notificação de falha do Telegram:', notificationError);
+      this.logger.error('Stack trace:', notificationError.stack);
+      // Não falhar a operação se a notificação falhar
+    }
+  }
+
+  // ... existing code ...
 }
