@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: ${DATABASE_USER:-moneymaker_user}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-ljZccQ+Y5DRBr4ljJnXqBdNatdX3BvwPSqaZbZ0tAjs=}
     ports:
-      - '${DATABASE_PORT:-5432}:5432'
+      - '127.0.0.1:5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
