@@ -41,10 +41,23 @@ export class AuthService {
           ...(clientId && { clientId }),
           status: 'ACTIVE',
         },
-        include: {
-          client: {
-            select: { id: true, name: true, status: true },
-          },
+        select: {
+          id: true,
+          clientId: true,
+          name: true,
+          email: true,
+          phone: true,
+          role: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          lastLogin: true,
+          emailVerified: true,
+          emailVerifiedAt: true,
+          employeeId: true, // <-- garante no JSON
+          lockedUntil: true,
+          password: true,
+          failedLoginAttempts: true,
         },
       });
 
@@ -59,6 +72,9 @@ export class AuthService {
           include: {
             client: {
               select: { id: true, name: true, status: true },
+            },
+            employees: {
+              select: { id: true, isActive: true },
             },
           },
         });
@@ -277,6 +293,9 @@ export class AuthService {
           include: {
             client: {
               select: { id: true, name: true, status: true },
+            },
+            employees: {
+              select: { id: true, isActive: true },
             },
           },
         },

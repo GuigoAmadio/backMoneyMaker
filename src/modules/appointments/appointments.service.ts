@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, ConflictException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  Logger,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { AppointmentStatus } from '@prisma/client';
 import { cleanData } from '../../common/utils/data-cleaner.util';
@@ -499,14 +505,17 @@ export class AppointmentsService {
     const { page = 1, limit = 10 } = paginationDto;
     const { status, serviceId, startDate, endDate, employeeId, userId } = filters;
 
+    this.logger.log(`Filters: ${JSON.stringify(filters)}`);
     const where: any = {
       clientId, // Filtrar por cliente
     };
 
     if (status) where.status = status;
     if (serviceId) where.serviceId = serviceId;
-    if (employeeId) where.employeeId = employeeId;
     if (userId) where.userId = userId;
+    if (employeeId) where.employeeId = employeeId;
+    // Não misturar filtro direto por userId nos appointments (mantemos a regra de mapear para employeeId)
+    // Removemos o antigo where.userId = userId para evitar resultados indesejados
     if (startDate || endDate) {
       where.startTime = {};
       if (startDate) where.startTime.gte = new Date(startDate);
@@ -537,9 +546,6 @@ export class AppointmentsService {
           employee: {
             select: {
               id: true,
-              name: true,
-              email: true,
-              position: true,
             },
           },
         },
@@ -654,6 +660,56 @@ export class AppointmentsService {
 
     try {
       this.logger.debug(`Dados recebidos: ${JSON.stringify(data)}`);
+
+      // VALIDAÇÃO: Verificar se employee existe
+      const employee = await this.prisma.employee.findFirst({
+        where: {
+          id: data.employeeId,
+          clientId: data.clientId,
+          isActive: true,
+        },
+        select: { id: true, name: true },
+      });
+
+      if (!employee) {
+        this.logger.error(
+          `Employee não encontrado: ${data.employeeId} para clientId: ${data.clientId}`,
+        );
+        throw new BadRequestException(
+          `Employee com ID ${data.employeeId} não encontrado ou inativo`,
+        );
+      }
+
+      // VALIDAÇÃO: Verificar se user existe
+      const user = await this.prisma.user.findFirst({
+        where: {
+          id: data.userId,
+          clientId: data.clientId,
+        },
+        select: { id: true, name: true },
+      });
+
+      if (!user) {
+        this.logger.error(`User não encontrado: ${data.userId} para clientId: ${data.clientId}`);
+        throw new BadRequestException(`User com ID ${data.userId} não encontrado`);
+      }
+
+      // VALIDAÇÃO: Verificar se service existe
+      const service = await this.prisma.service.findFirst({
+        where: {
+          id: data.serviceId,
+          clientId: data.clientId,
+          isActive: true,
+        },
+        select: { id: true, name: true },
+      });
+
+      if (!service) {
+        this.logger.error(
+          `Service não encontrado: ${data.serviceId} para clientId: ${data.clientId}`,
+        );
+        throw new BadRequestException(`Service com ID ${data.serviceId} não encontrado ou inativo`);
+      }
 
       // Verificar conflito de horário
       const hasConflict = await this.checkTimeConflict(

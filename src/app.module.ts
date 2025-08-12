@@ -19,10 +19,12 @@ import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { ProductsModule } from './modules/products/products.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { AnnotationsModule } from './modules/annotations/annotations.module';
 import { PropertiesModule } from './modules/properties/properties.module';
 import { EcommerceModule } from './modules/ecommerce/ecommerce.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { LoggerInterceptor } from './common/logger/logger.interceptor';
+import { LoggerModule } from './common/logger/logger.module';
 import { MetricsModule } from './common/metrics/metrics.module';
 import { MetricsInterceptor } from './common/metrics/metrics.interceptor';
 import { CacheInterceptor } from './common/interceptors/cache.interceptor';
@@ -82,6 +84,7 @@ import { TelegramSecurityMiddleware } from './common/notifications/telegram.midd
     OrdersModule,
     ProductsModule,
     DashboardModule,
+    AnnotationsModule,
     PropertiesModule,
 
     // Ecommerce
@@ -89,6 +92,7 @@ import { TelegramSecurityMiddleware } from './common/notifications/telegram.midd
     MetricsModule,
     TelegramModule,
     CacheModule,
+    LoggerModule,
   ],
   controllers: [AppController],
   providers: [

@@ -8,7 +8,10 @@ import * as winston from 'winston';
     {
       provide: 'WINSTON_MODULE_PROVIDER',
       useFactory: () => {
-        return winston.createLogger({
+        console.log('🔧 Configurando Winston Logger...');
+        console.log('🔧 LOG_LEVEL:', process.env.LOG_LEVEL || 'debug');
+        
+        const logger = winston.createLogger({
           level: process.env.LOG_LEVEL || 'debug', // Permitir logs de debug
           transports: [
             new winston.transports.Console({
@@ -38,6 +41,9 @@ import * as winston from 'winston';
             }),
           ],
         });
+        
+        console.log('✅ Winston Logger configurado com sucesso!');
+        return logger;
       },
     },
     LoggerService,

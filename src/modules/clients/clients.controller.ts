@@ -34,7 +34,7 @@ export class ClientsController implements OnModuleInit {
   onModuleInit() {
     this.logger.log('🚀 ClientsController foi carregado e inicializado');
     this.logger.log(
-      '📍 Rotas registradas: GET /clients, POST /clients, GET /clients/:id, PATCH /clients/:id, DELETE /clients/:id',
+      '📍 Rotas registradas: GET /clients, POST /clients, GET /clients/:id, PATCH /clients/:id, DELETE /clients/:id, GET /clients/by-employee/:userId',
     );
   }
 
@@ -83,12 +83,19 @@ export class ClientsController implements OnModuleInit {
   }
 
   @Get(':id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.EMPLOYEE)
   @ApiOperation({ summary: 'Buscar cliente por ID' })
   @ApiResponse({ status: 200, description: 'Cliente encontrado com sucesso' })
-  async findOne(@Param('id') id: string, @Tenant() clientId: string) {
+  async findOne(@Param('id') id: string, @Tenant() clientId: string, ...args: any[]) {
     this.logger.log(`🔍 ROTA GET /clients/${id} CHAMADA!`);
-    return this.clientsService.findOne(id, clientId);
+    // Extrair req.user (definido pelo JwtStrategy) para repassar ao service
+    const request =
+      args && args[0]?.switchToHttp?.() ? args[0].switchToHttp().getRequest() : (undefined as any);
+    const user = request?.user;
+    const requester = user
+      ? { userId: user.id, employeeId: user.employeeId, role: user.role }
+      : undefined;
+    return this.clientsService.findOne(id, clientId, requester);
   }
 
   @Patch(':id')
@@ -111,5 +118,23 @@ export class ClientsController implements OnModuleInit {
   async remove(@Param('id') id: string, @Tenant() clientId: string) {
     this.logger.log(`🗑️ ROTA DELETE /clients/${id} CHAMADA!`);
     return this.clientsService.remove(id, clientId);
+  }
+
+  @Get('by-employee/:userId')
+  @ApiOperation({ summary: 'Buscar clientes por funcionário (usando user_id)' })
+  @ApiResponse({ status: 200, description: 'Clientes encontrados com sucesso' })
+  async findClientsByEmployee(@Param('userId') employeeId: string, @Tenant() clientId: string) {
+    this.logger.log(`👥 ROTA GET /clients/by-employee/${employeeId} CHAMADA!`);
+    this.logger.log(`🏢 ClientId: ${clientId}`);
+    this.logger.log(`👤 employeeId: ${employeeId}`);
+
+    try {
+      const result = await this.clientsService.findClientsByEmployee(employeeId);
+      this.logger.log('✅ Busca de clientes por funcionário realizada com sucesso');
+      return result;
+    } catch (error) {
+      this.logger.error('❌ Erro na busca de clientes por funcionário:', error);
+      throw error;
+    }
   }
 }

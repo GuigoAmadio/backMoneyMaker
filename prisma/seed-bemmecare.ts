@@ -174,7 +174,7 @@ async function main() {
           friday: { start: '08:00', end: '18:00' },
         },
         isActive: true,
-      },
+      } as any,
     }),
     prisma.employee.upsert({
       where: {
@@ -200,7 +200,7 @@ async function main() {
           friday: { start: '09:00', end: '17:00' },
         },
         isActive: true,
-      },
+      } as any,
     }),
   ]);
 

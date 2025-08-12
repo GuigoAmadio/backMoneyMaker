@@ -20,14 +20,22 @@ export class TransformInterceptor<T> implements NestInterceptor<T, Response<T>> 
     const request = context.switchToHttp().getRequest<Request>();
     const startTime = Date.now();
 
+    this.logger.log(
+      `=== TransformInterceptor: Processando requisição ${request.method} ${request.url} ===`,
+    );
+
     return next.handle().pipe(
       map((data) => {
+        this.logger.log(`=== TransformInterceptor: Transformando resposta ===`);
+
         // Se a resposta já tem a estrutura esperada (success, data, message), não transformar
         if (data && typeof data === 'object' && 'success' in data && 'data' in data) {
+          this.logger.log(`=== TransformInterceptor: Resposta já tem estrutura esperada ===`);
           return data;
         }
 
         // Caso contrário, aplicar a transformação padrão
+        this.logger.log(`=== TransformInterceptor: Aplicando transformação padrão ===`);
         return {
           success: true,
           data,
@@ -38,7 +46,9 @@ export class TransformInterceptor<T> implements NestInterceptor<T, Response<T>> 
       }),
       tap(() => {
         const duration = Date.now() - startTime;
-        this.logger.log(`${request.method} ${request.url} - ${duration}ms`);
+        this.logger.log(
+          `=== TransformInterceptor: ${request.method} ${request.url} - ${duration}ms ===`,
+        );
       }),
     );
   }

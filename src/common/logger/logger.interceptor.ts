@@ -13,7 +13,7 @@ export class LoggerInterceptor implements NestInterceptor {
     const { method, url, body, user } = request;
     const startTime = Date.now();
 
-    this.logger.log(`Incoming ${method} ${url}`, {
+    this.logger.log(`=== LoggerInterceptor: Incoming ${method} ${url} ===`, {
       method,
       url,
       body: this.sanitizeBody(body),
@@ -26,27 +26,33 @@ export class LoggerInterceptor implements NestInterceptor {
       tap((data) => {
         const duration = Date.now() - startTime;
         const statusCode = response.statusCode;
-        this.logger.log(`Outgoing ${method} ${url} ${statusCode} - ${duration}ms`, {
-          method,
-          url,
-          statusCode,
-          duration,
-          userId: (user as any)?.id || null,
-          responseSize: JSON.stringify(data).length,
-        });
+        this.logger.log(
+          `=== LoggerInterceptor: Outgoing ${method} ${url} ${statusCode} - ${duration}ms ===`,
+          {
+            method,
+            url,
+            statusCode,
+            duration,
+            userId: (user as any)?.id || null,
+            responseSize: JSON.stringify(data).length,
+          },
+        );
       }),
       catchError((error) => {
         const duration = Date.now() - startTime;
         const statusCode = error.status || 500;
-        this.logger.error(`Error ${method} ${url} ${statusCode} - ${duration}ms`, {
-          method,
-          url,
-          statusCode,
-          duration,
-          userId: (user as any)?.id || null,
-          error: error.message,
-          stack: error.stack,
-        });
+        this.logger.error(
+          `=== LoggerInterceptor: Error ${method} ${url} ${statusCode} - ${duration}ms ===`,
+          {
+            method,
+            url,
+            statusCode,
+            duration,
+            userId: (user as any)?.id || null,
+            error: error.message,
+            stack: error.stack,
+          },
+        );
         throw error;
       }),
     );

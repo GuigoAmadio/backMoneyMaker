@@ -88,4 +88,11 @@ export class CreateEmployeeDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'ID do usuário associado (users.id). Se não informado, será inferido pelo email',
+  })
+  @IsOptional()
+  @IsString()
+  userId?: string;
 }

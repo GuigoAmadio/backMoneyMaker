@@ -1,194 +1,215 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, UserStatus, UserRole, Prisma } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-async function main() {
-  console.log('🌱 Iniciando seed do Expatriamente...');
+// ID fixo solicitado
+const CLIENT_ID = '2a2ad019-c94a-4f35-9dc8-dd877b3e8ec8';
 
-  // 1. Criar cliente Expatriamente
-  const client = await prisma.client.upsert({
-    where: { slug: 'expatriamente' },
-    update: {},
-    create: {
+// Util: parser de horários (reaproveitado e simplificado)
+function parseHorarios(horarios: string[] = []): Record<string, string[]> {
+  const working: Record<string, string[]> = {};
+  const diasSemana = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+  horarios.forEach((linha) => {
+    const m = linha.match(/(\d+)[a-zà-ú]*\s*-\s*(.+)/i);
+    if (!m) return;
+    const dia = parseInt(m[1], 10);
+    const blocos = m[2].split(/[,e]/).map((s) => s.trim());
+
+    const horas: string[] = [];
+    for (const b of blocos) {
+      const h1 = b.match(/^(\d{1,2}):(\d{2})$/);
+      if (h1) {
+        horas.push(`${h1[1].padStart(2, '0')}:${h1[2]}`);
+        continue;
+      }
+      const h2 = b.match(/^(\d{1,2})h(\d{2})/);
+      if (h2) {
+        horas.push(`${h2[1].padStart(2, '0')}:${h2[2]}`);
+        continue;
+      }
+      const h3 = b.match(/^(\d{1,2}):(\d{2})\s*às/);
+      if (h3) {
+        horas.push(`${h3[1].padStart(2, '0')}:${h3[2]}`);
+        continue;
+      }
+    }
+
+    const unicos = [...new Set(horas)].sort();
+    if (dia >= 1 && dia <= 7 && unicos.length > 0) {
+      working[diasSemana[dia - 1]] = unicos;
+    }
+  });
+
+  return working;
+}
+
+// Normaliza nome -> email
+function generateEmail(nome: string): string {
+  return (
+    nome
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, '.')
+      .replace(/\.+/g, '.')
+      .replace(/^\.|\.$/g, '') + '@expatriamente.com'
+  );
+}
+
+async function main() {
+  console.log('🌱 Seed (produção simplificada) - Expatriamente');
+
+  // 0) Ler psicanalistas.json
+  const psicanalistasPath = path.join(__dirname, 'psicanalistas.json');
+  const json = fs.readFileSync(psicanalistasPath, 'utf-8');
+  const psicanalistas: Array<{
+    nome: string;
+    foto?: string;
+    contato?: string;
+    convite?: string;
+    horarios?: string[];
+    observacoes?: string;
+  }> = JSON.parse(json);
+
+  // Helper para limpar um tenant específico
+  const cleanupTenant = async (clientId: string) => {
+    await prisma.appointment.deleteMany({ where: { clientId } });
+    await prisma.order.deleteMany({ where: { clientId } });
+    await prisma.product.deleteMany({ where: { clientId } });
+    await prisma.service.deleteMany({ where: { clientId } });
+    await prisma.category.deleteMany({ where: { clientId } });
+    await prisma.employee.deleteMany({ where: { clientId } });
+    await prisma.user.deleteMany({ where: { clientId } });
+    await prisma.client.deleteMany({ where: { id: clientId } });
+  };
+
+  // 1) Se já existe um client com o slug 'expatriamente' (mesmo com outro ID), limpar e remover
+  const existingBySlug = await prisma.client.findUnique({ where: { slug: 'expatriamente' } });
+  if (existingBySlug && existingBySlug.id !== CLIENT_ID) {
+    console.log('🧹 Encontrado client por slug com ID diferente. Limpando:', existingBySlug.id);
+    await cleanupTenant(existingBySlug.id);
+  }
+
+  // 2) Limpeza do tenant alvo (ID fixo)
+  console.log('🧹 Limpando dados do tenant alvo...');
+  await cleanupTenant(CLIENT_ID);
+
+  // 2) Criar client com ID fixo
+  const client = await prisma.client.create({
+    data: {
+      id: CLIENT_ID,
       name: 'Expatriamente',
       slug: 'expatriamente',
       email: 'contato@expatriamente.com',
-      phone: '(11) 99999-9999',
-      logo: '/logoFinal.svg',
-      website: 'https://expatriamente.com',
       status: 'ACTIVE',
       plan: 'premium',
       settings: {},
     },
   });
-  console.log('✅ Cliente Expatriamente criado:', client.id);
+  console.log('✅ Client criado:', client.id);
 
-  // 2. Criar 5 empregados (psicanalistas)
-  const employees = [];
-  const employeeNames = [
-    'Dr. Ana Silva',
-    'Dr. Carlos Mendes',
-    'Dra. Maria Santos',
-    'Dr. João Oliveira',
-    'Dra. Paula Costa',
-  ];
-
-  const employeeDescriptions = [
-    'Especialista em terapia cognitivo-comportamental',
-    'Psicanalista com foco em relacionamentos',
-    'Especialista em ansiedade e depressão',
-    'Psicólogo infantil e adolescente',
-    'Terapeuta familiar e de casais',
-  ];
-
-  for (let i = 0; i < 5; i++) {
-    const employee = await prisma.employee.upsert({
-      where: {
-        clientId_email: {
-          clientId: client.id,
-          email: `psicanalista${i + 1}@expatriamente.com`,
-        },
-      },
-      update: {},
-      create: {
-        clientId: client.id,
-        name: employeeNames[i],
-        email: `psicanalista${i + 1}@expatriamente.com`,
-        phone: `(11) 9${String(i + 1).padStart(4, '0')}-0000`,
-        position: 'Psicanalista',
-        description: employeeDescriptions[i],
-        avatar: `/funcionarios/${employeeNames[i].replace(' ', ' ')}.jpg`,
-        workingHours: ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00'],
-        isActive: true,
-      },
-    });
-    employees.push(employee);
-  }
-  console.log('✅ 5 Employees criados');
-
-  // 3. Criar 50 clientes
-  const clients = [];
-  for (let i = 1; i <= 50; i++) {
-    const clientUser = await prisma.user.upsert({
-      where: {
-        clientId_email: {
-          clientId: client.id,
-          email: `cliente${i}@expatriamente.com`,
-        },
-      },
-      update: {},
-      create: {
-        clientId: client.id,
-        name: `Cliente ${i}`,
-        email: `cliente${i}@expatriamente.com`,
-        phone: `(11) 9${String(i).padStart(4, '0')}-0000`,
-        password: 'senha123',
-        role: 'CLIENT',
-        status: 'ACTIVE',
-        emailVerified: true,
-        emailVerifiedAt: new Date(),
-      },
-    });
-    clients.push(clientUser);
-  }
-  console.log('✅ 50 Clientes criados');
-
-  // 4. Criar serviço de psicanálise
-  const service = await prisma.service.upsert({
-    where: { id: 'serv-psicanalise' },
-    update: {},
-    create: {
-      id: 'serv-psicanalise',
+  // 3) Admin
+  const admin = await prisma.user.create({
+    data: {
       clientId: client.id,
-      name: 'Sessão de Psicanálise',
-      description: 'Atendimento individual com psicanalista',
-      duration: 60,
-      price: 200,
+      name: 'Admin Expatriamente',
+      email: 'admin@expatriamente.com',
+      password: await bcrypt.hash('admin123', 10),
+      role: UserRole.SUPER_ADMIN,
+      status: UserStatus.ACTIVE,
+      emailVerified: true,
+      emailVerifiedAt: new Date(),
+    },
+  });
+  console.log('✅ Admin criado:', admin.email);
+
+  // 4) Funcionários (users + employees) com senha padrão
+  const defaultPassword = 'Expatriamente2025!';
+  const hashedDefault = await bcrypt.hash(defaultPassword, 10);
+
+  const createdEmployees: { id: string }[] = [];
+
+  for (const p of psicanalistas) {
+    const email = generateEmail(p.nome);
+    const workingHours = parseHorarios(p.horarios || []);
+    const isActive = (p.convite || '').trim().toLowerCase() === 'sim';
+
+    const user = await prisma.user.create({
+      data: {
+        clientId: client.id,
+        name: p.nome,
+        email,
+        phone: p.contato || null,
+        avatar: p.foto || null,
+        role: UserRole.EMPLOYEE,
+        status: isActive ? UserStatus.ACTIVE : UserStatus.INACTIVE,
+        password: hashedDefault,
+        emailVerified: false,
+      },
+    });
+
+    const employee = await prisma.employee.create({
+      data: {
+        clientId: client.id,
+        userId: user.id,
+        name: p.nome,
+        email,
+        phone: p.contato || null,
+        avatar: p.foto || null,
+        position: 'Psicanalista Clínico',
+        description: p.observacoes || 'Psicanalista especializado em atendimento clínico',
+        workingHours: workingHours as any,
+        isActive: isActive,
+      } as any,
+    });
+
+    // vincular de volta no user.employee_id (opcional, mas útil)
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { employeeId: employee.id },
+    });
+
+    createdEmployees.push({ id: employee.id });
+  }
+  console.log(`✅ Funcionários criados: ${createdEmployees.length}`);
+  console.log(`   🔐 Senha padrão: ${defaultPassword}`);
+
+  // 5) Categoria e Serviço
+  const category = await prisma.category.create({
+    data: {
+      clientId: client.id,
+      name: 'Psicanálise',
+      description: 'Categoria de serviços de psicanálise',
+      color: '#01386F',
       isActive: true,
     },
   });
 
-  // 5. Limpar appointments existentes
-  await prisma.appointment.deleteMany({
-    where: { clientId: client.id },
+  const service = await prisma.service.create({
+    data: {
+      clientId: client.id,
+      categoryId: category.id,
+      name: 'Sessão de Psicanálise',
+      description: 'Atendimento individual com psicanalista especializado',
+      duration: 60,
+      price: new Prisma.Decimal(250),
+      isActive: true,
+      employees: { connect: createdEmployees }, // conecta todos os funcionários
+    },
   });
 
-  // 6. Criar appointments distribuídos ao longo de um mês
-  const now = new Date();
-  let appointmentCount = 0;
-
-  // Para cada empregado, criar 10 consultas com clientes diferentes
-  for (let employeeIndex = 0; employeeIndex < employees.length; employeeIndex++) {
-    const employee = employees[employeeIndex];
-
-    // Pegar 10 clientes diferentes para este empregado
-    const startClientIndex = employeeIndex * 10;
-    const endClientIndex = startClientIndex + 10;
-    const clientsForEmployee = clients.slice(startClientIndex, endClientIndex);
-
-    console.log(
-      `📅 Criando consultas para ${employee.name} com ${clientsForEmployee.length} clientes`,
-    );
-
-    for (let clientIndex = 0; clientIndex < clientsForEmployee.length; clientIndex++) {
-      const clientUser = clientsForEmployee[clientIndex];
-
-      // Distribuir consultas ao longo de 30 dias
-      const appointmentDay = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate() + clientIndex + 1, // +1 para começar amanhã
-        0,
-        0,
-        0,
-        0,
-      );
-
-      // Horários de trabalho: 9h, 10h, 11h, 14h, 15h, 16h, 17h
-      const workingHours = [9, 10, 11, 14, 15, 16, 17];
-      const hourIndex = clientIndex % workingHours.length;
-      const appointmentHour = workingHours[hourIndex];
-
-      const startTime = new Date(
-        appointmentDay.getFullYear(),
-        appointmentDay.getMonth(),
-        appointmentDay.getDate(),
-        appointmentHour,
-        0,
-        0,
-        0,
-      );
-
-      const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // +1 hora
-
-      await prisma.appointment.create({
-        data: {
-          startTime,
-          endTime,
-          status: 'SCHEDULED',
-          clientId: client.id,
-          userId: clientUser.id,
-          employeeId: employee.id,
-          serviceId: service.id,
-        },
-      });
-      appointmentCount++;
-    }
-  }
-
-  console.log('✅ Appointments criados:', appointmentCount);
-  console.log('📊 Resumo:');
-  console.log(`   - ${employees.length} empregados`);
-  console.log(`   - ${clients.length} clientes`);
-  console.log(`   - ${appointmentCount} consultas agendadas`);
-  console.log(`   - Cada empregado tem ${appointmentCount / employees.length} consultas`);
+  console.log('✅ Categoria e Serviço criados:', category.name, ' / ', service.name);
+  console.log('🎉 Seed finalizado com sucesso para o tenant:', client.id);
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error('❌ Erro no seed:', e);
     process.exit(1);
   })
   .finally(async () => {

@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service';
 import { CreateClientDto } from './dto/create-client.dto';
@@ -224,7 +229,11 @@ export class ClientsService {
   /**
    * Buscar cliente por ID
    */
-  async findOne(id: string, clientId: string) {
+  async findOne(
+    id: string,
+    clientId: string,
+    requester?: { userId?: string; employeeId?: string; role?: string },
+  ) {
     this.logger.log(`Service: Buscando usuário ${id} para clientId: ${clientId}`);
 
     const user = await this.prisma.user.findFirst({
@@ -236,6 +245,36 @@ export class ClientsService {
     if (!user) {
       this.logger.log(`Service: Usuário não encontrado`);
       throw new NotFoundException('Usuário não encontrado');
+    }
+
+    // Se o solicitante for EMPLOYEE, validar relação por appointment
+    if (requester?.role === 'EMPLOYEE') {
+      // Resolver employeeId a partir do token, se necessário
+      let employeeId = requester.employeeId;
+      if (!employeeId && requester.userId) {
+        const employee = await this.prisma.employee.findFirst({
+          where: { userId: requester.userId },
+          select: { id: true },
+        });
+        employeeId = employee?.id;
+      }
+
+      if (!employeeId) {
+        throw new ForbiddenException('Funcionário não associado corretamente');
+      }
+
+      const existsRelation = await this.prisma.appointment.findFirst({
+        where: {
+          clientId, // tenant
+          employeeId,
+          userId: id, // usuário (cliente/paciente)
+        },
+        select: { id: true },
+      });
+
+      if (!existsRelation) {
+        throw new ForbiddenException('Sem vínculo com este cliente');
+      }
     }
 
     const result = {
@@ -456,21 +495,30 @@ export class ClientsService {
 
   /**
    * Buscar todos os usuários (clientes) que já tiveram appointment com um employee
+   * O userId recebido é usado para encontrar o employee correspondente via userId
    */
   async findClientsByEmployee(employeeId: string) {
     // Buscar todos os userIds distintos que têm appointment com esse employee
     const appointments = await this.prisma.appointment.findMany({
-      where: { employeeId },
+      where: { employeeId: employeeId },
       select: { userId: true },
       distinct: ['userId'],
     });
 
     const userIds = appointments.map((a) => a.userId);
+    this.logger.log(`📋 Service: Encontrados ${userIds.length} clientes únicos com appointments`);
 
     if (userIds.length === 0) {
       return {
         data: [],
-        meta: { total: 0, page: 1, limit: 100, totalPages: 1, hasNext: false, hasPrevious: false },
+        meta: {
+          total: 0,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNext: false,
+          hasPrevious: false,
+        },
       };
     }
 
@@ -478,6 +526,8 @@ export class ClientsService {
     const users = await this.prisma.user.findMany({
       where: { id: { in: userIds } },
     });
+
+    this.logger.log(`✅ Service: Retornando ${users.length} clientes`);
 
     return {
       data: users,
@@ -490,5 +540,9 @@ export class ClientsService {
         hasPrevious: false,
       },
     };
+  }
+  catch(error) {
+    this.logger.error(`❌ Service: Erro ao buscar clientes por employee: ${error.message}`);
+    throw error;
   }
 }

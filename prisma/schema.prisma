@@ -40,6 +40,7 @@ model Client {
   stockMovements     StockMovement[]
   suppliers          Supplier[]
   users              User[]
+  annotations        Annotation[]
 
   @@map("clients")
 }
@@ -47,6 +48,7 @@ model Client {
 model User {
   id                          String          @id @default(uuid())
   clientId                    String          @map("client_id")
+  employeeId                  String?         @map("employee_id")
   name                        String
   email                       String
   phone                       String?
@@ -69,11 +71,16 @@ model User {
   refreshTokens               RefreshToken[]
   stockMovements              StockMovement[]
   client                      Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  employees                   Employee[]
+  employee                    Employee?       @relation("UserEmployee", fields: [employeeId], references: [id], onDelete: SetNull)
+  annotations                 Annotation[]
 
   @@unique([clientId, email])
+  @@unique([clientId, employeeId])
   @@index([clientId, role]) // Índice para queries por client e role
   @@index([email]) // Índice para login
   @@index([status]) // Índice para filtros por status
+  @@index([employeeId]) // Índice para busca por employee
   @@map("users")
 }
 
@@ -91,6 +98,7 @@ model RefreshToken {
 model Employee {
   id           String        @id @default(uuid())
   clientId     String        @map("client_id")
+  userId       String        @map("user_id")
   name         String
   email        String
   phone        String?
@@ -98,16 +106,19 @@ model Employee {
   position     String
   description  String?
   workingHours Json          @default("{}")
-  password     String?       // Nova coluna opcional
   isActive     Boolean       @default(true)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   appointments Appointment[]
   doctors      Doctor[]
   client       Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userEmployee User[]        @relation("UserEmployee")
   services     Service[]     @relation("EmployeeToService")
+  annotations  Annotation[]
 
   @@unique([clientId, email])
+  @@unique([clientId, userId])
   @@index([clientId, isActive]) // Índice para funcionários ativos
   @@index([email]) // Índice para busca por email
   @@map("employees")
@@ -149,6 +160,7 @@ model Appointment {
   employee    Employee?         @relation(fields: [employeeId], references: [id], onDelete: SetNull)
   service     Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   client      Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  annotations Annotation[]
 
   @@index([clientId, startTime]) // Índice para queries por período
   @@index([clientId, status]) // Índice para filtros por status
@@ -156,6 +168,36 @@ model Appointment {
   @@index([employeeId]) // Índice para appointments do funcionário
   @@index([startTime]) // Índice para ordenação por data
   @@map("appointments")
+}
+
+// ===== Anotações de sessão =====
+enum AnnotationVisibility {
+  PRIVATE_TO_EMPLOYEE
+  SHARED_WITH_CLIENT
+}
+
+model Annotation {
+  id            String               @id @default(uuid())
+  clientId      String               @map("client_id")
+  userId        String               @map("user_id")
+  employeeId    String?              @map("employee_id")
+  createdById   String               @map("created_by_id")
+  createdByRole UserRole             @map("created_by_role")
+  appointmentId String?              @map("appointment_id")
+  content       String
+  visibility    AnnotationVisibility @default(PRIVATE_TO_EMPLOYEE)
+  isPinned      Boolean              @default(false) @map("is_pinned")
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employee    Employee?    @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  client      Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, userId, createdAt])
+  @@index([appointmentId])
+  @@map("annotations")
 }
 
 model Category {

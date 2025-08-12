@@ -85,12 +85,34 @@ export class EmployeesService {
       throw new ConflictException('Email já está em uso por outro funcionário');
     }
 
+    // Resolver userId: usar o informado ou inferir pelo email do usuário deste client
+    let resolvedUserId = createEmployeeDto.userId;
+    if (!resolvedUserId) {
+      const user = await this.prisma.user.findFirst({
+        where: { clientId, email: createEmployeeDto.email },
+        select: { id: true },
+      });
+      if (!user) {
+        throw new BadRequestException(
+          'Usuário não encontrado para este email neste cliente. Informe userId ou crie o usuário primeiro.',
+        );
+      }
+      resolvedUserId = user.id;
+    }
+
     const employee = await this.prisma.employee.create({
       data: {
-        ...createEmployeeDto,
-        clientId,
+        name: createEmployeeDto.name,
+        email: createEmployeeDto.email,
+        phone: createEmployeeDto.phone,
+        avatar: createEmployeeDto.avatar,
+        position: createEmployeeDto.position,
+        description: createEmployeeDto.description,
         workingHours: createEmployeeDto.workingHours || {},
-      },
+        isActive: createEmployeeDto.isActive ?? true,
+        clientId: clientId,
+        userId: resolvedUserId,
+      } as any,
       include: {
         client: {
           select: { id: true, name: true },

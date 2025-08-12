@@ -128,8 +128,19 @@ export class EmployeesController {
   @ApiOperation({ summary: 'Listar funcionários' })
   @ApiResponse({ status: 200, description: 'Lista de funcionários' })
   async findAll(@Tenant() clientId: string, @Query() query: any) {
-    this.logger.log(`Listando funcionários para clientId: ${clientId}`);
-    return await this.employeesService.findAll(clientId, query);
+    this.logger.log(`=== INÍCIO: Listando funcionários para clientId: ${clientId} ===`);
+    this.logger.log(`Query params: ${JSON.stringify(query)}`);
+    this.logger.log(`Cache configurado: key=employees:list, ttl=300`);
+
+    try {
+      const result = await this.employeesService.findAll(clientId, query);
+      this.logger.log(`=== SUCESSO: Listagem concluída para clientId: ${clientId} ===`);
+      this.logger.log(`Resultado: ${JSON.stringify(result)}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`=== ERRO: Listagem falhou para clientId: ${clientId} ===`, error);
+      throw error;
+    }
   }
 
   @Get(':id')
@@ -143,10 +154,17 @@ export class EmployeesController {
   @ApiResponse({ status: 200, description: 'Funcionário encontrado' })
   @ApiResponse({ status: 404, description: 'Funcionário não encontrado' })
   async findOne(@Param('id') id: string, @Tenant() clientId: string) {
-    this.logger.log(`Buscando funcionário ${id} para clientId: ${clientId}`);
-    const result = await this.employeesService.findOne(id, clientId);
-    this.logger.log(`Resultado da busca:`, result);
-    return result;
+    this.logger.log(`=== INÍCIO: Buscando funcionário ${id} para clientId: ${clientId} ===`);
+
+    try {
+      const result = await this.employeesService.findOne(id, clientId);
+      this.logger.log(`=== SUCESSO: Busca concluída para funcionário ${id} ===`);
+      this.logger.log(`Resultado: ${JSON.stringify(result)}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`=== ERRO: Busca falhou para funcionário ${id} ===`, error);
+      throw error;
+    }
   }
 
   @Post()
