@@ -41,6 +41,7 @@ model Client {
   suppliers          Supplier[]
   users              User[]
   annotations        Annotation[]
+  cacheMetadata      CacheMetadata[]
 
   @@map("clients")
 }
@@ -969,4 +970,26 @@ enum CouponType {
   PERCENTAGE
   FIXED
   FREE_SHIPPING
+}
+
+// ✅ Cache Metadata para sistema de cache inteligente do frontend
+model CacheMetadata {
+  id          String   @id @default(uuid())
+  clientId    String   @map("client_id")
+  cacheKey    String   @map("cache_key")
+  lastUpdated DateTime @map("last_updated")
+  version     String?  // Hash opcional dos dados
+  dataSize    Int?     @map("data_size") // Tamanho dos dados em bytes
+  hitCount    Int      @default(0) @map("hit_count") // Contador de acessos
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relacionamento com cliente
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // Índices compostos para performance
+  @@unique([clientId, cacheKey])
+  @@index([clientId, cacheKey])
+  @@index([clientId, lastUpdated])
+  @@map("frontend_cache_metadata")
 }

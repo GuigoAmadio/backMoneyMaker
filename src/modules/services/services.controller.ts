@@ -29,6 +29,8 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { Tenant } from '../../common/decorators/tenant.decorator';
 import { Cacheable, CacheInvalidate } from '../../common/decorators/cache.decorator';
 import { CacheService } from '../../common/cache/cache.service';
+import { CacheEventsController } from '../cache/cache-events.controller';
+import { CacheMetadataService } from '../cache/cache-metadata.service';
 import { UserRole } from '@prisma/client';
 
 @ApiTags('Serviços')
@@ -42,6 +44,7 @@ export class ServicesController {
   constructor(
     private readonly servicesService: ServicesService,
     private readonly cacheService: CacheService,
+    private readonly cacheMetadataService: CacheMetadataService,
   ) {}
 
   @Post()
@@ -50,11 +53,22 @@ export class ServicesController {
   @ApiResponse({ status: 201, description: 'Serviço criado com sucesso' })
   @ApiResponse({ status: 400, description: 'Dados inválidos' })
   @ApiResponse({ status: 409, description: 'Nome do serviço já está em uso' })
-  create(@Body() createServiceDto: CreateServiceDto, @Tenant() clientId: string) {
+  async create(@Body() createServiceDto: CreateServiceDto, @Tenant() clientId: string) {
     this.logger.log(`Criando serviço para clientId: ${clientId}`);
     this.logger.debug(`Dados recebidos: ${JSON.stringify(createServiceDto)}`);
 
-    const result = this.servicesService.create(clientId, createServiceDto);
+    const result = await this.servicesService.create(clientId, createServiceDto);
+
+    // ✅ Atualizar metadata de cache
+    console.log(
+      `🔄 [Services] Atualizando cache metadata após criação - clientId: ${clientId}, serviceId: ${result.data?.id}`,
+    );
+    await this.cacheMetadataService.updateCacheMetadata(clientId, 'services');
+
+    // ✅ Emitir evento SSE para invalidação em tempo real
+    console.log(`📡 [Services] Emitindo evento SSE após criação - serviceId: ${result.data?.id}`);
+    CacheEventsController.invalidateServicesCache(clientId, result.data?.id);
+    console.log(`✅ [Services] Cache e SSE processados com sucesso após criação`);
 
     this.logger.log(`Serviço criado com sucesso para clientId: ${clientId}`);
     return result;
@@ -118,7 +132,7 @@ export class ServicesController {
   @ApiResponse({ status: 404, description: 'Serviço não encontrado' })
   @ApiResponse({ status: 409, description: 'Nome do serviço já está em uso' })
   @ApiResponse({ status: 400, description: 'Dados inválidos' })
-  update(
+  async update(
     @Param('id') id: string,
     @Body() updateServiceDto: UpdateServiceDto,
     @Tenant() clientId: string,
@@ -126,7 +140,13 @@ export class ServicesController {
     this.logger.log(`Atualizando serviço ${id} para clientId: ${clientId}`);
     this.logger.debug(`Dados recebidos: ${JSON.stringify(updateServiceDto)}`);
 
-    const result = this.servicesService.update(clientId, id, updateServiceDto);
+    const result = await this.servicesService.update(clientId, id, updateServiceDto);
+
+    // ✅ Atualizar metadata de cache
+    await this.cacheMetadataService.updateCacheMetadata(clientId, 'services');
+
+    // ✅ Emitir evento SSE para invalidação em tempo real
+    CacheEventsController.invalidateServicesCache(clientId, id);
 
     this.logger.log(`Serviço atualizado com sucesso para clientId: ${clientId}`);
     return result;
@@ -137,10 +157,16 @@ export class ServicesController {
   @ApiOperation({ summary: 'Deletar serviço' })
   @ApiResponse({ status: 200, description: 'Serviço deletado com sucesso' })
   @ApiResponse({ status: 404, description: 'Serviço não encontrado' })
-  remove(@Param('id') id: string, @Tenant() clientId: string) {
+  async remove(@Param('id') id: string, @Tenant() clientId: string) {
     this.logger.log(`Deletando serviço ${id} para clientId: ${clientId}`);
 
-    const result = this.servicesService.remove(clientId, id);
+    const result = await this.servicesService.remove(clientId, id);
+
+    // ✅ Atualizar metadata de cache
+    await this.cacheMetadataService.updateCacheMetadata(clientId, 'services');
+
+    // ✅ Emitir evento SSE para invalidação em tempo real
+    CacheEventsController.invalidateServicesCache(clientId, id);
 
     this.logger.log(`Serviço deletado com sucesso para clientId: ${clientId}`);
     return result;

@@ -71,14 +71,6 @@
     "observacoes": "Não consegue disponibilizar horários neste momento porque está com a agenda comprometida."
   },
   {
-    "nome": "Flávio Caputo",
-    "foto": "URL_ou_nome_do_arquivo",
-    "contato": "(19) 99649-8354",
-    "convite": "Sim",
-    "horarios": [],
-    "observacoes": "Encaminhei a apresentação dia 07/07"
-  },
-  {
     "nome": "Gabriela Reis",
     "foto": "/funcionarios/Gabriela Reis - Psicanalista Clínica.jpeg.jpg",
     "contato": "(11)99613-3022",
@@ -134,14 +126,6 @@
       "6a - 10:00 e 11:00."
     ],
     "observacoes": "Nome: Laura Truzzi Guyot. Formação: Comunicação Social (graduação) e pós em Gestão de Pessoas. Analista Disc. Practiner em PNL. Coaching - SBC. Psicanálise - CFPC. Pós em Psicanálise - CFPC. ADI - CFPC. Psicanálise Infantil - CFPC."
-  },
-  {
-    "nome": "Luis Marcelo Costa e Silva",
-    "foto": "URL_ou_nome_do_arquivo",
-    "contato": "(19) 99174-5453",
-    "convite": "Sim",
-    "horarios": [],
-    "observacoes": "Irá integrar o grupo a posteriori em virtude de outros compromissos."
   },
   {
     "nome": "Marina Valente",
@@ -216,36 +200,12 @@
     "observacoes": "Decidi dedicar-me à Psicanálise, concluindo o curso no Centro de Formação em Psicanálise Clínica (CFPC) na turma XLIII, 2024. No CFPC, também conclui os cursos de Terapia de Casais, Acesso Direto ao Inconsciente e Psicanálise Infantil. Formei-me em Educação Física 1975, cursei Estado-Maior em 1987/88 e especializei-me em Análise de Situações de Crise em 1999. Servi em vários estados no Brasil e cumpri duas missões no exterior, acompanhado da família. Cursei a Escola de Guerra do Exército dos Estados Unidos (USAWC) em 1992/93 e fui Adido de Defesa em Angola (1999/2000). Após deixar o serviço, Gerente de Segurança Empresarial da PETROBRAS, responsável pela proteção de pessoas, instalações e informações das empresas do Sistema, entre 2005 e 2015, oportunidade em que pude apoiar empregados em situações de crises no exterior, como na Nigéria (2009/10) e na Líbia (2011)."
   },
   {
-    "nome": "Reinaldo Lima",
-    "foto": "URL_ou_nome_do_arquivo",
-    "contato": "(19) 99624-1515",
-    "convite": "Sim",
-    "horarios": [],
-    "observacoes": "Terá condições de integrar o grupo a partir de Outubro/2025."
-  },
-  {
-    "nome": "Silvia de Souza",
-    "foto": "URL_ou_nome_do_arquivo",
-    "contato": "(19) 99201-4555",
-    "convite": "",
-    "horarios": [],
-    "observacoes": "Ainda não respondeu."
-  },
-  {
     "nome": "Sylvia Maluf",
     "foto": "/funcionarios/Sylvia Duarte Maluf - Psicanalista Clínica.jpeg.jpg",
     "contato": "(11) 98555-1212",
     "convite": "Sim",
     "horarios": ["2a - 9:00", "4a - 9:00 e 10:00", "5a - 9:00 e 10:00"],
     "observacoes": "Cobra R$ 200,00 atualmente. Formação: Direito - USF, Psicanálise - CFPC, Psicologia Analítica - IJEP - SP. Público Alvo: 15 e 70 anos - homem ou mulher."
-  },
-  {
-    "nome": "Soraya Benito",
-    "foto": "URL_ou_nome_do_arquivo",
-    "contato": "(11) 98137-0324",
-    "convite": "",
-    "horarios": [],
-    "observacoes": "A partir de Fevereiro de 2026."
   },
   {
     "nome": "Tacyana Salomão",

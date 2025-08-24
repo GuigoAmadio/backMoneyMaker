@@ -25,6 +25,8 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { Tenant } from '../../common/decorators/tenant.decorator';
 import { Cacheable, CacheInvalidate } from '../../common/decorators/cache.decorator';
 import { CacheService } from '../../common/cache/cache.service';
+import { CacheEventsController } from '../cache/cache-events.controller';
+import { CacheMetadataService } from '../cache/cache-metadata.service';
 
 @ApiTags('Usuários')
 @Controller({ path: 'users', version: '1' })
@@ -37,6 +39,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly cacheService: CacheService,
+    private readonly cacheMetadataService: CacheMetadataService,
   ) {}
 
   @Get()
@@ -75,10 +78,21 @@ export class UsersController {
     this.logger.log(`Criando usuário para clientId: ${clientId}`);
     const user = await this.usersService.create(createUserDto, clientId);
 
-    // Invalidar cache específico do usuário criado
+    // ✅ Invalidar cache específico do usuário criado
     if (user?.id) {
       await this.cacheService.delete(`users:detail:${user.id}`);
     }
+
+    // ✅ Atualizar metadata de cache
+    console.log(
+      `🔄 [Users] Atualizando cache metadata após criação - clientId: ${clientId}, userId: ${user?.id}`,
+    );
+    await this.cacheMetadataService.updateCacheMetadata(clientId, 'clients');
+
+    // ✅ Emitir evento SSE para invalidação em tempo real
+    console.log(`📡 [Users] Emitindo evento SSE após criação - userId: ${user?.id}`);
+    CacheEventsController.invalidateClientsCache(clientId, user?.id);
+    console.log(`✅ [Users] Cache e SSE processados com sucesso após criação`);
 
     return user;
   }
@@ -92,8 +106,14 @@ export class UsersController {
     this.logger.log(`Atualizando usuário ${id} para clientId: ${clientId}`);
     const user = await this.usersService.update(id, updateUserDto, clientId);
 
-    // Invalidar cache específico do usuário atualizado
+    // ✅ Invalidar cache específico do usuário atualizado
     await this.cacheService.delete(`users:detail:${id}`);
+
+    // ✅ Atualizar metadata de cache
+    await this.cacheMetadataService.updateCacheMetadata(clientId, 'clients');
+
+    // ✅ Emitir evento SSE para invalidação em tempo real
+    CacheEventsController.invalidateClientsCache(clientId, id);
 
     return user;
   }
@@ -107,8 +127,14 @@ export class UsersController {
     this.logger.log(`Deletando usuário ${id} para clientId: ${clientId}`);
     await this.usersService.remove(id, clientId);
 
-    // Invalidar cache específico do usuário removido
+    // ✅ Invalidar cache específico do usuário removido
     await this.cacheService.delete(`users:detail:${id}`);
+
+    // ✅ Atualizar metadata de cache
+    await this.cacheMetadataService.updateCacheMetadata(clientId, 'clients');
+
+    // ✅ Emitir evento SSE para invalidação em tempo real
+    CacheEventsController.invalidateClientsCache(clientId, id);
 
     return { success: true, message: 'Usuário removido com sucesso' };
   }

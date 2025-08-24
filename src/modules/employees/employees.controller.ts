@@ -26,6 +26,8 @@ import { Tenant } from '../../common/decorators/tenant.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { Cacheable, CacheInvalidate } from '../../common/decorators/cache.decorator';
 import { CacheService } from '../../common/cache/cache.service';
+import { CacheEventsController } from '../cache/cache-events.controller';
+import { CacheMetadataService } from '../cache/cache-metadata.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 
@@ -40,6 +42,7 @@ export class EmployeesController {
   constructor(
     private readonly employeesService: EmployeesService,
     private readonly cacheService: CacheService,
+    private readonly cacheMetadataService: CacheMetadataService,
   ) {}
 
   @Get('count')
@@ -176,10 +179,16 @@ export class EmployeesController {
     this.logger.log(`Criando funcionário para clientId: ${clientId}`);
     const employee = await this.employeesService.create(createEmployeeDto, clientId);
 
-    // Invalidar cache específico do funcionário criado
+    // ✅ Invalidar cache específico do funcionário criado
     if (employee.data?.id) {
       await this.cacheService.delete(`employees:detail:${employee.data.id}`);
     }
+
+    // ✅ Atualizar metadata de cache
+    await this.cacheMetadataService.updateCacheMetadata(clientId, 'employees');
+
+    // ✅ Emitir evento SSE para invalidação em tempo real
+    CacheEventsController.invalidateEmployeesCache(clientId, employee.data?.id);
 
     return employee;
   }
@@ -197,8 +206,14 @@ export class EmployeesController {
     this.logger.log(`Atualizando funcionário ${id} para clientId: ${clientId}`);
     const employee = await this.employeesService.update(id, updateEmployeeDto, clientId);
 
-    // Invalidar cache específico do funcionário atualizado
+    // ✅ Invalidar cache específico do funcionário atualizado
     await this.cacheService.delete(`employees:detail:${id}`);
+
+    // ✅ Atualizar metadata de cache
+    await this.cacheMetadataService.updateCacheMetadata(clientId, 'employees');
+
+    // ✅ Emitir evento SSE para invalidação em tempo real
+    CacheEventsController.invalidateEmployeesCache(clientId, id);
 
     return employee;
   }
@@ -212,8 +227,14 @@ export class EmployeesController {
     this.logger.log(`Deletando funcionário ${id} para clientId: ${clientId}`);
     await this.employeesService.remove(id, clientId);
 
-    // Invalidar cache específico do funcionário removido
+    // ✅ Invalidar cache específico do funcionário removido
     await this.cacheService.delete(`employees:detail:${id}`);
+
+    // ✅ Atualizar metadata de cache
+    await this.cacheMetadataService.updateCacheMetadata(clientId, 'employees');
+
+    // ✅ Emitir evento SSE para invalidação em tempo real
+    CacheEventsController.invalidateEmployeesCache(clientId, id);
 
     return { success: true, message: 'Funcionário removido com sucesso' };
   }
