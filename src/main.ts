@@ -40,11 +40,14 @@ async function bootstrap() {
   // Compressão
   app.use(compression());
 
-  // CORS configurável - Incluindo porta 3001 para BemMeCare
+  // CORS configurável - Incluindo domínios de produção
   const corsOrigins = configService.get('CORS_ORIGINS')?.split(',') || [
     'http://localhost:3000',
     'http://localhost:3001', // BemMeCare frontend
     'http://localhost:3002', // Outros frontends
+    'https://www.expatriamente.com', // Frontend Expatriamente
+    'https://expatriamente.com', // Frontend Expatriamente (sem www)
+    'https://api.expatriamente.com', // Backend API
   ];
 
   // Em desenvolvimento, permitir todas as origens para facilitar testes
