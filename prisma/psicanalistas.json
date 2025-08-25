@@ -1,7 +1,7 @@
 [
   {
     "nome": "Ademir Fragnani Jr",
-    "foto": "/funcionarios/Ademir Fragnani Jr.jpeg.jpg",
+    "foto": "/funcionarios/Ademir Fragnani Junior.jpg",
     "contato": "(19) 99999-8880",
     "convite": "Sim",
     "horarios": [
@@ -86,7 +86,7 @@
   },
   {
     "nome": "José Carlos Pires Júnior",
-    "foto": "URL_ou_nome_do_arquivo",
+    "foto": "/funcionarios/Jose Carlos Pires Junior.jpg",
     "contato": "(11) 976026002",
     "convite": "Sim",
     "horarios": [
@@ -99,14 +99,14 @@
   },
   {
     "nome": "Juliana Hipólito",
-    "foto": "URL_ou_nome_do_arquivo",
+    "foto": "/funcionarios/Juliana Hipólito.jpg",
     "contato": "(19) 99967-7966",
     "convite": "Sim",
     "horarios": ["2a - 20:00", "3a - 20:00"],
     "observacoes": "Formação: Relações públicas - Puc campinas, MBA gestão de pessoas e Mkt pela FGV, Psicanalista - CFPC, Pós Psicanalista infantil - CFPC. Público alvo: indiferente."
   },
   {
-    "nome": "Juliano Casarin (Video)",
+    "nome": "Juliano Casarin",
     "foto": "/funcionarios/Juliano Casarin - psicanalista Clínico.jpeg.jpg",
     "contato": "(19) 99684-6555",
     "convite": "Sim",
@@ -150,7 +150,7 @@
   },
   {
     "nome": "Mary Louzas",
-    "foto": "URL_ou_nome_do_arquivo",
+    "foto": "/funcionarios/Mary Louzas.jpg",
     "contato": "(12) 99723-9566",
     "convite": "Sim",
     "horarios": ["4a - 9:00, 10:00 e 11:00.", "5a - 10:00 e 11:00."],
@@ -225,7 +225,7 @@
   },
   {
     "nome": "Waldomiro N. Santos",
-    "foto": "URL_ou_nome_do_arquivo",
+    "foto": "/funcionarios/Waldomiro Santos.jpg",
     "contato": "(19) 99998-9587",
     "convite": "Sim",
     "horarios": ["2a - 10:00", "3a - 10:00"],
