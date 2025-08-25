@@ -492,4 +492,118 @@ export class EmployeesService {
       throw error;
     }
   }
+
+  /**
+   * Obter funcionários disponíveis
+   */
+  async getAvailableEmployees(clientId: string, date?: string, serviceId?: string): Promise<any[]> {
+    this.logger.log(
+      `Obtendo funcionários disponíveis para clientId: ${clientId}, date: ${date}, serviceId: ${serviceId}`,
+    );
+
+    try {
+      const where: any = {
+        clientId,
+        isActive: true,
+      };
+
+      // Se um serviço específico foi fornecido, filtrar pelos funcionários que oferecem esse serviço
+      if (serviceId) {
+        where.services = {
+          some: {
+            id: serviceId,
+            isActive: true,
+          },
+        };
+      }
+
+      let employees = await this.prisma.employee.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        include: {
+          services: {
+            select: {
+              id: true,
+              name: true,
+              duration: true,
+              price: true,
+              isActive: true,
+            },
+            where: {
+              isActive: true,
+            },
+          },
+          _count: {
+            select: {
+              appointments: true,
+            },
+          },
+        },
+      });
+
+      // Se uma data específica foi fornecida, verificar disponibilidade na data
+      if (date) {
+        const targetDate = new Date(date);
+        const startOfDay = new Date(targetDate);
+        startOfDay.setHours(0, 0, 0, 0);
+
+        const endOfDay = new Date(targetDate);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        // Buscar agendamentos para cada funcionário na data especificada
+        const employeesWithAvailability = await Promise.all(
+          employees.map(async (employee) => {
+            const appointmentsOnDate = await this.prisma.appointment.count({
+              where: {
+                employeeId: employee.id,
+                startTime: {
+                  gte: startOfDay,
+                  lte: endOfDay,
+                },
+                status: {
+                  in: ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS'],
+                },
+              },
+            });
+
+            // Assumir que funcionários com menos de 8 agendamentos no dia ainda estão disponíveis
+            const isAvailableOnDate = appointmentsOnDate < 8;
+
+            return {
+              ...employee,
+              isAvailableOnDate,
+              appointmentsOnDate,
+            };
+          }),
+        );
+
+        employees = employeesWithAvailability.filter((emp) => emp.isAvailableOnDate) as any[];
+      }
+
+      this.logger.log(
+        `Encontrados ${employees.length} funcionários disponíveis para clientId: ${clientId}`,
+      );
+
+      return employees.map((employee: any) => ({
+        id: employee.id,
+        name: employee.name,
+        email: employee.email,
+        phone: employee.phone,
+        position: employee.position,
+        avatar: employee.avatar,
+        description: employee.description,
+        workingHours: employee.workingHours,
+        isActive: employee.isActive,
+        services: employee.services,
+        appointmentsCount: employee._count.appointments,
+        ...(date && {
+          appointmentsOnDate: employee.appointmentsOnDate,
+          isAvailableOnDate: employee.isAvailableOnDate,
+        }),
+      }));
+    } catch (error) {
+      this.logger.error(`Erro ao obter funcionários disponíveis para clientId: ${clientId}`, error);
+      throw error;
+    }
+  }
 }

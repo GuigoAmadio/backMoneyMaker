@@ -126,6 +126,23 @@ export class AuthController {
     }
   }
 
+  @UseGuards(AuthGuard('jwt'))
+  @Get('profile')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Alias para /me - Obter informações do usuário autenticado' })
+  @ApiResponse({
+    status: 200,
+    description: 'Informações do usuário',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Token inválido ou expirado',
+  })
+  async getProfileAlias(@Req() req: any) {
+    // Redirecionar para o método getProfile
+    return this.getProfile(req);
+  }
+
   @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)

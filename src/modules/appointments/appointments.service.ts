@@ -1188,4 +1188,93 @@ export class AppointmentsService {
 
     return Math.round(totalMinutes / appointments.length);
   }
+
+  /**
+   * Extrair usuário do token JWT (método simplificado)
+   */
+  async getUserFromToken(authHeader: string): Promise<any> {
+    try {
+      // Remover 'Bearer ' do header
+      const token = authHeader?.replace('Bearer ', '');
+      
+      if (!token) {
+        this.logger.warn('Token não fornecido');
+        return null;
+      }
+
+      // Aqui você pode decodificar o JWT ou usar o JwtService se necessário
+      // Por enquanto, vou fazer uma implementação simplificada
+      // Você pode melhorar isso usando o JwtService para decodificar o token
+      
+      this.logger.log('Método getUserFromToken chamado - implementação simplificada');
+      return null; // Retornar null por enquanto
+    } catch (error) {
+      this.logger.error('Erro ao extrair usuário do token', error);
+      return null;
+    }
+  }
+
+  /**
+   * Obter agendamentos do usuário logado
+   */
+  async getMyAppointments(clientId: string, userId: string, filters: any): Promise<any[]> {
+    this.logger.log(`Obtendo agendamentos do usuário ${userId} para cliente ${clientId}`);
+
+    try {
+      const where: any = {
+        clientId,
+        userId,
+      };
+
+      if (filters.status) {
+        where.status = filters.status;
+      }
+
+      const appointments = await this.prisma.appointment.findMany({
+        where,
+        include: {
+          service: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              duration: true,
+              price: true,
+            },
+          },
+          employee: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+        orderBy: { startTime: 'desc' },
+        take: filters.limit || 50,
+      });
+
+      this.logger.log(`Encontrados ${appointments.length} agendamentos para usuário ${userId}`);
+
+      return appointments.map(appointment => ({
+        id: appointment.id,
+        startTime: appointment.startTime,
+        endTime: appointment.endTime,
+        status: appointment.status,
+        service: {
+          name: appointment.service?.name,
+          price: Number(appointment.service?.price) || 0,
+        },
+        employee: {
+          name: appointment.employee?.name,
+          email: appointment.employee?.email,
+        },
+        createdAt: appointment.createdAt,
+        updatedAt: appointment.updatedAt,
+      }));
+    } catch (error) {
+      this.logger.error(`Erro ao obter agendamentos do usuário ${userId}`, error);
+      throw error;
+    }
+  }
 }

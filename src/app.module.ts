@@ -35,6 +35,10 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { JwtStrategy } from './modules/auth/strategies/jwt.strategy';
 import { MetricsMiddleware } from './common/metrics/metrics.middleware';
 import { TelegramSecurityMiddleware } from './common/notifications/telegram.middleware';
+import { CacheEventsModule } from './cache-events/cache-events.module';
+import { DashboardModule as NewDashboardModule } from './dashboard/dashboard.module';
+import { SettingsModule } from './settings/settings.module';
+import { ServicesModule as NewServicesModule } from './services/services.module';
 
 @Module({
   imports: [
@@ -93,6 +97,12 @@ import { TelegramSecurityMiddleware } from './common/notifications/telegram.midd
     TelegramModule,
     CacheModule,
     LoggerModule,
+
+    // Novos módulos
+    CacheEventsModule,
+    NewDashboardModule,
+    SettingsModule,
+    NewServicesModule,
   ],
   controllers: [AppController],
   providers: [

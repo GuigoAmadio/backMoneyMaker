@@ -9,8 +9,8 @@ import {
   Query,
   UseGuards,
   Logger,
+  Req,
 } from '@nestjs/common';
-import { Headers as NestHeaders } from '@nestjs/common';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -197,6 +197,37 @@ export class AppointmentsController {
   ) {
     const durationMinutes = duration ? parseInt(duration) : 60;
     return await this.appointmentsService.getAvailableSlots(date, durationMinutes);
+  }
+
+  @Get('my')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Obter meus agendamentos' })
+  @ApiResponse({ status: 200, description: 'Lista dos meus agendamentos' })
+  @ApiQuery({ name: 'status', required: false, description: 'Filtrar por status' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Limite de resultados' })
+  async getMyAppointments(@Tenant() clientId: string, @Query() query: any, @Req() req: any) {
+    this.logger.log(`Obtendo agendamentos do usuário para clientId: ${clientId}`);
+
+    // Extrair user do request (já autenticado pelo JwtAuthGuard)
+    const user = req.user;
+
+    if (!user || !user.id) {
+      throw new Error('Usuário não autenticado');
+    }
+
+    const filters = {
+      userId: user.id,
+      status: query.status,
+      limit: query.limit ? parseInt(query.limit) : 50,
+    };
+
+    const result = await this.appointmentsService.getMyAppointments(clientId, user.id, filters);
+
+    this.logger.log(`Agendamentos do usuário retornados com sucesso para clientId: ${clientId}`);
+    return {
+      success: true,
+      data: result,
+    };
   }
 
   @Get()

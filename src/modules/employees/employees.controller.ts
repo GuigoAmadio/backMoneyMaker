@@ -121,6 +121,43 @@ export class EmployeesController {
     return await this.employeesService.getEmployeeStats(clientId);
   }
 
+  @Get('available')
+  @Public()
+  @Cacheable({
+    key: 'employees:available',
+    ttl: 300, // 5 minutos
+    tags: ['employees', 'available'],
+  })
+  @ApiOperation({ summary: 'Listar funcionários disponíveis' })
+  @ApiResponse({ status: 200, description: 'Lista de funcionários disponíveis' })
+  @ApiQuery({
+    name: 'date',
+    required: false,
+    description: 'Data para verificar disponibilidade (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'serviceId',
+    required: false,
+    description: 'ID do serviço para filtrar especialistas',
+  })
+  async getAvailableEmployees(
+    @Tenant() clientId: string,
+    @Query('date') date?: string,
+    @Query('serviceId') serviceId?: string,
+  ) {
+    this.logger.log(
+      `Obtendo funcionários disponíveis para clientId: ${clientId}, date: ${date}, serviceId: ${serviceId}`,
+    );
+
+    const result = await this.employeesService.getAvailableEmployees(clientId, date, serviceId);
+
+    this.logger.log(`Funcionários disponíveis retornados com sucesso para clientId: ${clientId}`);
+    return {
+      success: true,
+      data: result,
+    };
+  }
+
   @Get()
   @Public()
   @Cacheable({
