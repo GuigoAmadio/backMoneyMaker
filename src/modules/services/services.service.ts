@@ -80,6 +80,9 @@ export class ServicesService {
     paginationDto: PaginationDto,
     search?: string,
     status?: string,
+    categoryId?: string,
+    minPrice?: number,
+    maxPrice?: number,
   ): Promise<PaginatedResult<any>> {
     this.logger.log(
       `Listando serviços para clientId: ${clientId}, search: ${search}, status: ${status}`,
@@ -102,6 +105,20 @@ export class ServicesService {
 
       if (status !== undefined) {
         where.isActive = status === 'active';
+      }
+
+      if (categoryId) {
+        where.categoryId = categoryId;
+      }
+
+      if (minPrice !== undefined || maxPrice !== undefined) {
+        where.price = {};
+        if (minPrice !== undefined) {
+          where.price.gte = minPrice;
+        }
+        if (maxPrice !== undefined) {
+          where.price.lte = maxPrice;
+        }
       }
 
       this.logger.debug(`Filtros aplicados: ${JSON.stringify(where)}`);
@@ -301,5 +318,174 @@ export class ServicesService {
       message: `Serviço ${isActive ? 'ativado' : 'desativado'} com sucesso`,
       data: updatedService,
     };
+  }
+
+  async getStats(clientId: string) {
+    this.logger.log(`Obtendo estatísticas para clientId: ${clientId}`);
+
+    try {
+      const [totalServices, activeServices, totalAppointments, averagePrice, mostBookedService] =
+        await Promise.all([
+          // Total de serviços
+          this.prisma.service.count({
+            where: { clientId },
+          }),
+
+          // Serviços ativos
+          this.prisma.service.count({
+            where: { clientId, isActive: true },
+          }),
+
+          // Total de appointments completados
+          this.prisma.appointment.count({
+            where: {
+              clientId,
+              status: 'COMPLETED',
+            },
+          }),
+
+          // Preço médio dos serviços
+          this.prisma.service.aggregate({
+            where: { clientId, isActive: true },
+            _avg: {
+              price: true,
+            },
+          }),
+
+          // Serviço mais agendado
+          this.prisma.service.findFirst({
+            where: { clientId },
+            include: {
+              _count: {
+                select: { appointments: true },
+              },
+            },
+            orderBy: {
+              appointments: {
+                _count: 'desc',
+              },
+            },
+          }),
+        ]);
+
+      // Calcular receita total baseada em appointments completados
+      const revenueData = await this.prisma.appointment.findMany({
+        where: {
+          clientId,
+          status: 'COMPLETED',
+        },
+        include: {
+          service: {
+            select: { price: true },
+          },
+        },
+      });
+
+      const totalRevenue = revenueData.reduce((sum, appointment) => {
+        return sum + Number(appointment.service.price);
+      }, 0);
+
+      const stats = {
+        totalServices,
+        activeServices,
+        inactiveServices: totalServices - activeServices,
+        totalRevenue,
+        averagePrice: Number(averagePrice._avg?.price) || 0,
+        mostBookedService: mostBookedService?.name || 'N/A',
+        totalAppointments,
+      };
+
+      return {
+        success: true,
+        data: stats,
+        message: 'Estatísticas obtidas com sucesso',
+      };
+    } catch (error) {
+      this.logger.error(`Erro ao obter estatísticas para clientId: ${clientId}`, error);
+      throw error;
+    }
+  }
+
+  async findPublic(
+    clientId: string,
+    paginationDto: PaginationDto,
+    search?: string,
+    categoryId?: string,
+    minPrice?: number,
+    maxPrice?: number,
+  ) {
+    this.logger.log(`Listando serviços públicos para clientId: ${clientId}`);
+
+    try {
+      const { page = 1, limit = 10 } = paginationDto;
+      const skip = (page - 1) * limit;
+
+      const where: any = {
+        clientId,
+        isActive: true, // Só serviços ativos são públicos
+      };
+
+      if (search) {
+        where.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+        ];
+      }
+
+      if (categoryId) {
+        where.categoryId = categoryId;
+      }
+
+      if (minPrice !== undefined || maxPrice !== undefined) {
+        where.price = {};
+        if (minPrice !== undefined) {
+          where.price.gte = minPrice;
+        }
+        if (maxPrice !== undefined) {
+          where.price.lte = maxPrice;
+        }
+      }
+
+      const [services, total] = await Promise.all([
+        this.prisma.service.findMany({
+          where,
+          skip,
+          take: limit,
+          include: {
+            category: {
+              select: { id: true, name: true, color: true },
+            },
+            _count: {
+              select: {
+                appointments: true,
+              },
+            },
+          },
+          orderBy: { name: 'asc' },
+        }),
+        this.prisma.service.count({ where }),
+      ]);
+
+      const totalPages = Math.ceil(total / limit);
+
+      return {
+        success: true,
+        data: {
+          data: services,
+          meta: {
+            page,
+            limit,
+            totalItems: total,
+            totalPages,
+            hasNext: page < totalPages,
+            hasPrevious: page > 1,
+          },
+        },
+        message: 'Serviços públicos listados com sucesso',
+      };
+    } catch (error) {
+      this.logger.error(`Erro ao listar serviços públicos para clientId: ${clientId}`, error);
+      throw error;
+    }
   }
 }

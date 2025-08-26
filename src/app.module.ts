@@ -22,6 +22,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { AnnotationsModule } from './modules/annotations/annotations.module';
 import { PropertiesModule } from './modules/properties/properties.module';
 import { EcommerceModule } from './modules/ecommerce/ecommerce.module';
+import { CategoriesModule } from './modules/categories/categories.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { LoggerInterceptor } from './common/logger/logger.interceptor';
 import { LoggerModule } from './common/logger/logger.module';
@@ -84,6 +85,7 @@ import { ServicesModule as NewServicesModule } from './services/services.module'
     ClientsModule,
     EmployeesModule,
     ServicesModule,
+    CategoriesModule,
     AppointmentsModule,
     OrdersModule,
     ProductsModule,

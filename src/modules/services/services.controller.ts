@@ -65,7 +65,7 @@ export class ServicesController {
       pattern: result.data?.id ? `services:${result.data.id}` : 'services',
       timestamp: new Date().toISOString(),
       clientId,
-      metadata: { reason: 'service_created' }
+      metadata: { reason: 'service_created' },
     });
     console.log(`✅ [Services] Cache e SSE processados com sucesso após criação`);
 
@@ -89,17 +89,31 @@ export class ServicesController {
     enum: ['active', 'inactive'],
     description: 'Filtrar por status',
   })
+  @ApiQuery({ name: 'categoryId', required: false, description: 'Filtrar por categoria' })
+  @ApiQuery({ name: 'minPrice', required: false, description: 'Preço mínimo' })
+  @ApiQuery({ name: 'maxPrice', required: false, description: 'Preço máximo' })
   findAll(
     @Query() paginationDto: PaginationDto,
     @Tenant() clientId: string,
     @Query('search') search?: string,
     @Query('status') status?: string,
+    @Query('categoryId') categoryId?: string,
+    @Query('minPrice') minPrice?: number,
+    @Query('maxPrice') maxPrice?: number,
   ) {
     this.logger.log(
       `Listando serviços para clientId: ${clientId}, search: ${search}, status: ${status}`,
     );
 
-    const result = this.servicesService.findAll(clientId, paginationDto, search, status);
+    const result = this.servicesService.findAll(
+      clientId,
+      paginationDto,
+      search,
+      status,
+      categoryId,
+      minPrice,
+      maxPrice,
+    );
 
     this.logger.log(`Serviços retornados com sucesso para clientId: ${clientId}`);
     return result;
@@ -147,7 +161,7 @@ export class ServicesController {
       pattern: id ? `services:${id}` : 'services',
       timestamp: new Date().toISOString(),
       clientId,
-      metadata: { reason: 'service_updated' }
+      metadata: { reason: 'service_updated' },
     });
 
     this.logger.log(`Serviço atualizado com sucesso para clientId: ${clientId}`);
@@ -170,7 +184,7 @@ export class ServicesController {
       pattern: id ? `services:${id}` : 'services',
       timestamp: new Date().toISOString(),
       clientId,
-      metadata: { reason: 'service_deleted' }
+      metadata: { reason: 'service_deleted' },
     });
 
     this.logger.log(`Serviço deletado com sucesso para clientId: ${clientId}`);
@@ -211,5 +225,50 @@ export class ServicesController {
   @ApiOperation({ summary: 'Obter estatísticas do cache de serviços' })
   async getCacheStats() {
     return this.cacheService.getStats();
+  }
+
+  @Get('stats')
+  @Roles(UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.SUPER_ADMIN)
+  @Cacheable({
+    key: 'services:stats',
+    ttl: 300, // 5 minutos
+    tags: ['services', 'stats'],
+  })
+  @ApiOperation({ summary: 'Obter estatísticas dos serviços' })
+  @ApiResponse({ status: 200, description: 'Estatísticas dos serviços' })
+  async getStats(@Tenant() clientId: string) {
+    this.logger.log(`Obtendo estatísticas de serviços para clientId: ${clientId}`);
+    return this.servicesService.getStats(clientId);
+  }
+
+  @Get('public')
+  @ApiOperation({ summary: 'Listar serviços públicos (para clientes)' })
+  @ApiResponse({ status: 200, description: 'Lista de serviços públicos' })
+  @ApiQuery({ name: 'search', required: false, description: 'Buscar por nome ou descrição' })
+  @ApiQuery({ name: 'categoryId', required: false, description: 'Filtrar por categoria' })
+  @ApiQuery({ name: 'minPrice', required: false, description: 'Preço mínimo' })
+  @ApiQuery({ name: 'maxPrice', required: false, description: 'Preço máximo' })
+  @Cacheable({
+    key: 'services:public',
+    ttl: 600, // 10 minutos
+    tags: ['services', 'public'],
+  })
+  async findPublic(
+    @Query() paginationDto: PaginationDto,
+    @Tenant() clientId: string,
+    @Query('search') search?: string,
+    @Query('categoryId') categoryId?: string,
+    @Query('minPrice') minPrice?: number,
+    @Query('maxPrice') maxPrice?: number,
+  ) {
+    this.logger.log(`Listando serviços públicos para clientId: ${clientId}`);
+    return this.servicesService.findPublic(
+      clientId,
+      paginationDto,
+      search,
+      categoryId,
+      minPrice,
+      maxPrice,
+    );
   }
 }
