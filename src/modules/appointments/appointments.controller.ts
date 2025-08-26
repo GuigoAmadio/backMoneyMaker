@@ -32,8 +32,7 @@ import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 import { Cacheable, CacheInvalidate } from '../../common/decorators/cache.decorator';
 import { CacheService } from '../../common/cache/cache.service';
-import { CacheEventsController } from '../cache/cache-events.controller';
-import { CacheMetadataService } from '../cache/cache-metadata.service';
+import { CacheEventsService } from '../../cache-events/cache-events.service';
 
 @ApiTags('Agendamentos')
 @Controller({ path: 'appointments', version: '1' })
@@ -45,7 +44,7 @@ export class AppointmentsController {
   constructor(
     private readonly appointmentsService: AppointmentsService,
     private readonly cacheService: CacheService,
-    private readonly cacheMetadataService: CacheMetadataService,
+    private readonly cacheEventsService: CacheEventsService,
   ) {}
 
   @Get('count')
@@ -276,17 +275,17 @@ export class AppointmentsController {
 
     const result = await this.appointmentsService.create(createAppointmentDto);
 
-    // ✅ Atualizar metadata de cache
-    console.log(
-      `🔄 [Appointments] Atualizando cache metadata após criação - clientId: ${clientId}`,
-    );
-    await this.cacheMetadataService.updateCacheMetadata(clientId, 'appointments');
-
     // ✅ Emitir evento SSE para invalidação em tempo real
     console.log(
       `📡 [Appointments] Emitindo evento SSE após criação - appointmentId: ${result.data?.id}`,
     );
-    CacheEventsController.invalidateAppointmentsCache(clientId, result.data?.id);
+    this.cacheEventsService.emitCacheEvent({
+      type: 'invalidate',
+      pattern: result.data?.id ? `appointments:${result.data.id}` : 'appointments',
+      timestamp: new Date().toISOString(),
+      clientId,
+      metadata: { reason: 'appointment_created' },
+    });
     console.log(`✅ [Appointments] Cache e SSE processados com sucesso após criação`);
 
     this.logger.log(`Agendamento criado com sucesso para clientId: ${clientId}`);
@@ -308,15 +307,15 @@ export class AppointmentsController {
 
     const result = await this.appointmentsService.update(id, clientId, updateAppointmentDto);
 
-    // ✅ Atualizar metadata de cache
-    console.log(
-      `🔄 [Appointments] Atualizando cache metadata após atualização - clientId: ${clientId}, appointmentId: ${id}`,
-    );
-    await this.cacheMetadataService.updateCacheMetadata(clientId, 'appointments');
-
     // ✅ Emitir evento SSE para invalidação em tempo real
     console.log(`📡 [Appointments] Emitindo evento SSE após atualização - appointmentId: ${id}`);
-    CacheEventsController.invalidateAppointmentsCache(clientId, id);
+    this.cacheEventsService.emitCacheEvent({
+      type: 'invalidate',
+      pattern: `appointments:${id}`,
+      timestamp: new Date().toISOString(),
+      clientId,
+      metadata: { reason: 'appointment_updated' },
+    });
     console.log(`✅ [Appointments] Cache e SSE processados com sucesso após atualização`);
 
     this.logger.log(`Agendamento atualizado com sucesso para clientId: ${clientId}`);
@@ -332,11 +331,14 @@ export class AppointmentsController {
 
     const result = await this.appointmentsService.remove(id);
 
-    // ✅ Atualizar metadata de cache
-    await this.cacheMetadataService.updateCacheMetadata(clientId, 'appointments');
-
     // ✅ Emitir evento SSE para invalidação em tempo real
-    CacheEventsController.invalidateAppointmentsCache(clientId, id);
+    this.cacheEventsService.emitCacheEvent({
+      type: 'invalidate',
+      pattern: `appointments:${id}`,
+      timestamp: new Date().toISOString(),
+      clientId,
+      metadata: { reason: 'appointment_deleted' },
+    });
 
     this.logger.log(`Agendamento deletado com sucesso para clientId: ${clientId}`);
     return result;
@@ -356,11 +358,14 @@ export class AppointmentsController {
 
     const result = await this.appointmentsService.updateStatus(id, status as AppointmentStatus);
 
-    // ✅ Atualizar metadata de cache
-    await this.cacheMetadataService.updateCacheMetadata(clientId, 'appointments');
-
     // ✅ Emitir evento SSE para invalidação em tempo real
-    CacheEventsController.invalidateAppointmentsCache(clientId, id);
+    this.cacheEventsService.emitCacheEvent({
+      type: 'invalidate',
+      pattern: `appointments:${id}`,
+      timestamp: new Date().toISOString(),
+      clientId,
+      metadata: { reason: 'appointment_status_updated' },
+    });
 
     this.logger.log(`Status do agendamento atualizado com sucesso para clientId: ${clientId}`);
     return result;

@@ -25,8 +25,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { Tenant } from '../../common/decorators/tenant.decorator';
 import { Cacheable, CacheInvalidate } from '../../common/decorators/cache.decorator';
 import { CacheService } from '../../common/cache/cache.service';
-import { CacheEventsController } from '../cache/cache-events.controller';
-import { CacheMetadataService } from '../cache/cache-metadata.service';
+import { CacheEventsService } from '../../cache-events/cache-events.service';
 
 @ApiTags('Usuários')
 @Controller({ path: 'users', version: '1' })
@@ -39,7 +38,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly cacheService: CacheService,
-    private readonly cacheMetadataService: CacheMetadataService,
+    private readonly cacheEventsService: CacheEventsService,
   ) {}
 
   @Get()
@@ -83,15 +82,15 @@ export class UsersController {
       await this.cacheService.delete(`users:detail:${user.id}`);
     }
 
-    // ✅ Atualizar metadata de cache
-    console.log(
-      `🔄 [Users] Atualizando cache metadata após criação - clientId: ${clientId}, userId: ${user?.id}`,
-    );
-    await this.cacheMetadataService.updateCacheMetadata(clientId, 'clients');
-
     // ✅ Emitir evento SSE para invalidação em tempo real
     console.log(`📡 [Users] Emitindo evento SSE após criação - userId: ${user?.id}`);
-    CacheEventsController.invalidateClientsCache(clientId, user?.id);
+    this.cacheEventsService.emitCacheEvent({
+      type: 'invalidate',
+      pattern: user?.id ? `clients:${user.id}` : 'clients',
+      timestamp: new Date().toISOString(),
+      clientId,
+      metadata: { reason: 'client_created' },
+    });
     console.log(`✅ [Users] Cache e SSE processados com sucesso após criação`);
 
     return user;
@@ -109,11 +108,14 @@ export class UsersController {
     // ✅ Invalidar cache específico do usuário atualizado
     await this.cacheService.delete(`users:detail:${id}`);
 
-    // ✅ Atualizar metadata de cache
-    await this.cacheMetadataService.updateCacheMetadata(clientId, 'clients');
-
     // ✅ Emitir evento SSE para invalidação em tempo real
-    CacheEventsController.invalidateClientsCache(clientId, id);
+    this.cacheEventsService.emitCacheEvent({
+      type: 'invalidate',
+      pattern: `clients:${id}`,
+      timestamp: new Date().toISOString(),
+      clientId,
+      metadata: { reason: 'client_updated' },
+    });
 
     return user;
   }
@@ -130,11 +132,14 @@ export class UsersController {
     // ✅ Invalidar cache específico do usuário removido
     await this.cacheService.delete(`users:detail:${id}`);
 
-    // ✅ Atualizar metadata de cache
-    await this.cacheMetadataService.updateCacheMetadata(clientId, 'clients');
-
     // ✅ Emitir evento SSE para invalidação em tempo real
-    CacheEventsController.invalidateClientsCache(clientId, id);
+    this.cacheEventsService.emitCacheEvent({
+      type: 'invalidate',
+      pattern: `clients:${id}`,
+      timestamp: new Date().toISOString(),
+      clientId,
+      metadata: { reason: 'client_deleted' },
+    });
 
     return { success: true, message: 'Usuário removido com sucesso' };
   }

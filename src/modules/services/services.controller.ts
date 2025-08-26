@@ -29,8 +29,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { Tenant } from '../../common/decorators/tenant.decorator';
 import { Cacheable, CacheInvalidate } from '../../common/decorators/cache.decorator';
 import { CacheService } from '../../common/cache/cache.service';
-import { CacheEventsController } from '../cache/cache-events.controller';
-import { CacheMetadataService } from '../cache/cache-metadata.service';
+import { CacheEventsService } from '../../cache-events/cache-events.service';
 import { UserRole } from '@prisma/client';
 
 @ApiTags('Serviços')
@@ -44,7 +43,7 @@ export class ServicesController {
   constructor(
     private readonly servicesService: ServicesService,
     private readonly cacheService: CacheService,
-    private readonly cacheMetadataService: CacheMetadataService,
+    private readonly cacheEventsService: CacheEventsService,
   ) {}
 
   @Post()
@@ -59,15 +58,15 @@ export class ServicesController {
 
     const result = await this.servicesService.create(clientId, createServiceDto);
 
-    // ✅ Atualizar metadata de cache
-    console.log(
-      `🔄 [Services] Atualizando cache metadata após criação - clientId: ${clientId}, serviceId: ${result.data?.id}`,
-    );
-    await this.cacheMetadataService.updateCacheMetadata(clientId, 'services');
-
     // ✅ Emitir evento SSE para invalidação em tempo real
     console.log(`📡 [Services] Emitindo evento SSE após criação - serviceId: ${result.data?.id}`);
-    CacheEventsController.invalidateServicesCache(clientId, result.data?.id);
+    this.cacheEventsService.emitCacheEvent({
+      type: 'invalidate',
+      pattern: result.data?.id ? `services:${result.data.id}` : 'services',
+      timestamp: new Date().toISOString(),
+      clientId,
+      metadata: { reason: 'service_created' }
+    });
     console.log(`✅ [Services] Cache e SSE processados com sucesso após criação`);
 
     this.logger.log(`Serviço criado com sucesso para clientId: ${clientId}`);
@@ -142,11 +141,14 @@ export class ServicesController {
 
     const result = await this.servicesService.update(clientId, id, updateServiceDto);
 
-    // ✅ Atualizar metadata de cache
-    await this.cacheMetadataService.updateCacheMetadata(clientId, 'services');
-
     // ✅ Emitir evento SSE para invalidação em tempo real
-    CacheEventsController.invalidateServicesCache(clientId, id);
+    this.cacheEventsService.emitCacheEvent({
+      type: 'invalidate',
+      pattern: id ? `services:${id}` : 'services',
+      timestamp: new Date().toISOString(),
+      clientId,
+      metadata: { reason: 'service_updated' }
+    });
 
     this.logger.log(`Serviço atualizado com sucesso para clientId: ${clientId}`);
     return result;
@@ -162,11 +164,14 @@ export class ServicesController {
 
     const result = await this.servicesService.remove(clientId, id);
 
-    // ✅ Atualizar metadata de cache
-    await this.cacheMetadataService.updateCacheMetadata(clientId, 'services');
-
     // ✅ Emitir evento SSE para invalidação em tempo real
-    CacheEventsController.invalidateServicesCache(clientId, id);
+    this.cacheEventsService.emitCacheEvent({
+      type: 'invalidate',
+      pattern: id ? `services:${id}` : 'services',
+      timestamp: new Date().toISOString(),
+      clientId,
+      metadata: { reason: 'service_deleted' }
+    });
 
     this.logger.log(`Serviço deletado com sucesso para clientId: ${clientId}`);
     return result;

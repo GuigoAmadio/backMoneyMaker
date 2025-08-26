@@ -66,6 +66,9 @@ async function bootstrap() {
       'Authorization',
       'x-client-id',
       'x-api-key',
+      'Cache-Control',
+      'Last-Event-ID',  // Para SSE
+      'Cache-Control', // Para SSE
     ],
   });
 

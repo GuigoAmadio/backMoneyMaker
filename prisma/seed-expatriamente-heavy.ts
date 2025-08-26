@@ -1,42 +1,17 @@
-import { PrismaClient, UserRole, UserStatus, AppointmentStatus, Prisma } from '@prisma/client';
+import { PrismaClient, UserStatus, UserRole, Prisma, AppointmentStatus } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-// Tenant fixo usado no seed simples
+// ID fixo solicitado
 const CLIENT_ID = '2a2ad019-c94a-4f35-9dc8-dd877b3e8ec8';
 
-type WorkingHours = Record<
-  'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday',
-  string[]
->;
-
-function emptyWorkingHours(): WorkingHours {
-  return {
-    monday: [],
-    tuesday: [],
-    wednesday: [],
-    thursday: [],
-    friday: [],
-    saturday: [],
-    sunday: [],
-  };
-}
-
-// Converte linhas “2a - 8:00, 10:00 e 16:00” em WorkingHours
-function parseHorarios(horarios: string[] = []): WorkingHours {
-  const working = emptyWorkingHours();
-  const diasSemana = [
-    'monday',
-    'tuesday',
-    'wednesday',
-    'thursday',
-    'friday',
-    'saturday',
-    'sunday',
-  ] as const;
+// Util: parser de horários (reaproveitado e simplificado)
+function parseHorarios(horarios: string[] = []): Record<string, string[]> {
+  const working: Record<string, string[]> = {};
+  const diasSemana = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
   horarios.forEach((linha) => {
     const m = linha.match(/(\d+)[a-zà-ú]*\s*-\s*(.+)/i);
@@ -65,50 +40,142 @@ function parseHorarios(horarios: string[] = []): WorkingHours {
 
     const unicos = [...new Set(horas)].sort();
     if (dia >= 1 && dia <= 7 && unicos.length > 0) {
-      const key = diasSemana[dia - 1];
-      (working as any)[key] = unicos;
+      working[diasSemana[dia - 1]] = unicos;
     }
   });
 
   return working;
 }
 
-function normalize(str: string) {
-  return str
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s]/g, '')
-    .replace(/\s+/g, '.')
-    .replace(/\.+/g, '.')
-    .replace(/^\.|\.$/g, '');
+// Normaliza nome -> email
+function generateEmail(nome: string): string {
+  return (
+    nome
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, '.')
+      .replace(/\.+/g, '.')
+      .replace(/^\.|\.$/g, '') + '@expatriamente.com'
+  );
 }
 
-function generateEmailFromName(name: string) {
-  return `${normalize(name)}@expatriamente.com`;
+// Gera usuários clientes fictícios
+function generateFakeClients(count: number) {
+  const firstNames = [
+    'Ana', 'Carlos', 'Maria', 'João', 'Patricia', 'Roberto', 'Fernanda', 'Ricardo',
+    'Claudia', 'Daniel', 'Juliana', 'Pedro', 'Camila', 'Rafael', 'Luciana', 'Thiago',
+    'Beatriz', 'Gustavo', 'Adriana', 'Marcelo', 'Renata', 'Felipe', 'Carla', 'Diego',
+    'Priscila', 'Bruno', 'Natalia', 'Leonardo', 'Monica', 'Andre', 'Fabiana', 'Lucas',
+    'Tatiana', 'Rodrigo', 'Cristina', 'Victor', 'Simone', 'Alexandre', 'Vanessa', 'Sergio'
+  ];
+
+  const lastNames = [
+    'Silva', 'Santos', 'Oliveira', 'Souza', 'Rodrigues', 'Ferreira', 'Alves', 'Pereira',
+    'Lima', 'Gomes', 'Costa', 'Ribeiro', 'Martins', 'Carvalho', 'Almeida', 'Lopes',
+    'Soares', 'Fernandes', 'Vieira', 'Barbosa', 'Rocha', 'Dias', 'Monteiro', 'Cardoso',
+    'Reis', 'Araujo', 'Correia', 'Pinto', 'Teixeira', 'Machado', 'Castro', 'Freitas'
+  ];
+
+  const clients = [];
+  const usedEmails = new Set<string>(); // Para garantir emails únicos
+  
+  for (let i = 0; i < count; i++) {
+    let email: string;
+    let fullName: string;
+    let attempts = 0;
+    
+    // Tentar até 10 vezes para gerar um email único
+    do {
+      const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+      const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+      fullName = `${firstName} ${lastName}`;
+      
+      // Se for tentativa > 1, adicionar um número ao final
+      if (attempts > 0) {
+        email = generateEmail(`${fullName}${attempts}`);
+      } else {
+        email = generateEmail(fullName);
+      }
+      
+      attempts++;
+    } while (usedEmails.has(email) && attempts < 10);
+    
+    // Se ainda tiver conflito após 10 tentativas, usar timestamp
+    if (usedEmails.has(email)) {
+      email = generateEmail(`${fullName}${Date.now()}${i}`);
+    }
+    
+    usedEmails.add(email);
+    
+    clients.push({
+      name: fullName,
+      email: email,
+      phone: `(11) 9${Math.floor(Math.random() * 9000) + 1000}-${Math.floor(Math.random() * 9000) + 1000}`,
+    });
+  }
+
+  return clients;
 }
 
-function nextMonday(d = new Date()): Date {
-  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const day = date.getUTCDay(); // 0 = Sun
-  const diff = (day === 0 ? 1 : 8 - day) % 7; // days to next Monday
-  date.setUTCDate(date.getUTCDate() + (diff === 0 ? 7 : diff));
-  date.setUTCHours(0, 0, 0, 0);
-  return date;
-}
+// Gera datas de agendamento para a semana atual e próximas
+function generateAppointmentDates() {
+  const dates = [];
+  const now = new Date();
 
-function addDays(base: Date, days: number): Date {
-  const d = new Date(base);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d;
-}
+  // Começar da segunda-feira da semana atual
+  const startOfWeek = new Date(now);
+  const dayOfWeek = startOfWeek.getDay();
+  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  startOfWeek.setDate(startOfWeek.getDate() + daysToMonday);
+  startOfWeek.setHours(0, 0, 0, 0);
 
-function dateFromWeekday(baseMonday: Date, weekday: number): Date {
-  return addDays(baseMonday, weekday);
+  // Gerar agendamentos para as próximas 4 semanas
+  for (let week = 0; week < 4; week++) {
+    for (let day = 0; day < 7; day++) {
+      const date = new Date(startOfWeek);
+      date.setDate(date.getDate() + week * 7 + day);
+
+      // Pular domingos para a maioria dos agendamentos
+      if (day === 6 && Math.random() > 0.3) continue;
+
+      // Horários de trabalho típicos de psicanalista
+      const timeSlots = [
+        '08:00',
+        '09:00',
+        '10:00',
+        '11:00',
+        '14:00',
+        '15:00',
+        '16:00',
+        '17:00',
+        '18:00',
+        '19:00',
+      ];
+
+      // Adicionar alguns horários por dia
+      const slotsPerDay = Math.floor(Math.random() * 6) + 2; // 2-7 agendamentos por dia
+      for (let slot = 0; slot < slotsPerDay; slot++) {
+        const timeSlot = timeSlots[Math.floor(Math.random() * timeSlots.length)];
+        const [hours, minutes] = timeSlot.split(':').map(Number);
+
+        const appointmentDate = new Date(date);
+        appointmentDate.setHours(hours, minutes, 0, 0);
+
+        // Só adicionar se for no futuro ou no presente
+        if (appointmentDate >= now) {
+          dates.push(appointmentDate);
+        }
+      }
+    }
+  }
+
+  return dates.sort((a, b) => a.getTime() - b.getTime());
 }
 
 async function main() {
-  console.log('🌱 Seed pesado – Expatriamente (users + appointments)');
+  console.log('🌱 Seed HEAVY (com muitos agendamentos) - Expatriamente');
 
   // 0) Ler psicanalistas.json
   const psicanalistasPath = path.join(__dirname, 'psicanalistas.json');
@@ -122,7 +189,7 @@ async function main() {
     observacoes?: string;
   }> = JSON.parse(json);
 
-  // 1) Limpeza hard do tenant
+  // Helper para limpar um tenant específico
   const cleanupTenant = async (clientId: string) => {
     await prisma.appointment.deleteMany({ where: { clientId } });
     await prisma.order.deleteMany({ where: { clientId } });
@@ -134,22 +201,32 @@ async function main() {
     await prisma.client.deleteMany({ where: { id: clientId } });
   };
 
-  console.log('🧹 Limpando tenant...');
+  // 1) Se já existe um client com o slug 'expatriamente' (mesmo com outro ID), limpar e remover
+  const existingBySlug = await prisma.client.findUnique({ where: { slug: 'expatriamente' } });
+  if (existingBySlug && existingBySlug.id !== CLIENT_ID) {
+    console.log('🧹 Encontrado client por slug com ID diferente. Limpando:', existingBySlug.id);
+    await cleanupTenant(existingBySlug.id);
+  }
+
+  // 2) Limpeza do tenant alvo (ID fixo)
+  console.log('🧹 Limpando dados do tenant alvo...');
   await cleanupTenant(CLIENT_ID);
 
-  // 2) Criar Client e Admin
+  // 3) Criar client com ID fixo
   const client = await prisma.client.create({
     data: {
       id: CLIENT_ID,
       name: 'Expatriamente',
       slug: 'expatriamente',
       email: 'contato@expatriamente.com',
-      plan: 'premium',
       status: 'ACTIVE',
+      plan: 'premium',
       settings: {},
     },
   });
+  console.log('✅ Client criado:', client.id);
 
+  // 4) Admin
   const admin = await prisma.user.create({
     data: {
       clientId: client.id,
@@ -162,15 +239,16 @@ async function main() {
       emailVerifiedAt: new Date(),
     },
   });
-  console.log('✅ Admin:', admin.email);
+  console.log('✅ Admin criado:', admin.email);
 
-  // 3) Criar Employees a partir do JSON
+  // 5) Funcionários (users + employees) com senha padrão
   const defaultPassword = 'Expatriamente2025!';
   const hashedDefault = await bcrypt.hash(defaultPassword, 10);
 
-  const createdEmployees: { id: string; workingHours: WorkingHours }[] = [];
+  const createdEmployees: { id: string; userId: string }[] = [];
+
   for (const p of psicanalistas) {
-    const email = generateEmailFromName(p.nome);
+    const email = generateEmail(p.nome);
     const workingHours = parseHorarios(p.horarios || []);
     const isActive = (p.convite || '').trim().toLowerCase() === 'sim';
 
@@ -199,16 +277,22 @@ async function main() {
         position: 'Psicanalista Clínico',
         description: p.observacoes || 'Psicanalista especializado em atendimento clínico',
         workingHours: workingHours as any,
-        isActive,
+        isActive: isActive,
       } as any,
     });
 
-    await prisma.user.update({ where: { id: user.id }, data: { employeeId: employee.id } });
-    createdEmployees.push({ id: employee.id, workingHours });
-  }
-  console.log(`✅ Funcionários: ${createdEmployees.length}`);
+    // vincular de volta no user.employee_id (opcional, mas útil)
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { employeeId: employee.id },
+    });
 
-  // 4) Serviço
+    createdEmployees.push({ id: employee.id, userId: user.id });
+  }
+  console.log(`✅ Funcionários criados: ${createdEmployees.length}`);
+  console.log(`   🔐 Senha padrão: ${defaultPassword}`);
+
+  // 6) Categoria e Serviço
   const category = await prisma.category.create({
     data: {
       clientId: client.id,
@@ -228,205 +312,113 @@ async function main() {
       duration: 60,
       price: new Prisma.Decimal(250),
       isActive: true,
-      employees: { connect: createdEmployees.map((e) => ({ id: e.id })) },
+      employees: { connect: createdEmployees.map((emp) => ({ id: emp.id })) }, // conecta todos os funcionários
     },
   });
 
-  // 5) Preparar slots disponíveis nas próximas 3 semanas (a partir da próxima segunda)
-  const baseMonday = nextMonday(new Date());
-  const WEEKS = 3;
-  const dowToKey: Record<number, keyof WorkingHours> = {
-    0: 'sunday',
-    1: 'monday',
-    2: 'tuesday',
-    3: 'wednesday',
-    4: 'thursday',
-    5: 'friday',
-    6: 'saturday',
-  } as const;
+  console.log('✅ Categoria e Serviço criados:', category.name, ' / ', service.name);
 
-  const employeeSlots = new Map<string, Date[]>();
-  for (const e of createdEmployees) {
-    const slots: Date[] = [];
-    for (let w = 0; w < WEEKS; w++) {
-      for (let dow = 0; dow < 7; dow++) {
-        const dayKey = dowToKey[dow];
-        const hours = e.workingHours[dayKey] || [];
-        if (!hours.length) continue;
-        const dayDate = addDays(baseMonday, w * 7 + dow);
-        for (const hhmm of hours) {
-          const [hh, mm] = hhmm.split(':').map((n) => parseInt(n, 10));
-          const slot = new Date(dayDate);
-          slot.setUTCHours(hh, mm, 0, 0);
-          if (slot.getTime() > Date.now()) {
-            slots.push(slot);
-          }
-        }
-      }
-    }
-    employeeSlots.set(
-      e.id,
-      slots.sort((a, b) => a.getTime() - b.getTime()),
-    );
-  }
+  // 7) Criar usuários clientes fictícios
+  console.log('👥 Criando usuários clientes fictícios...');
+  const fakeClients = generateFakeClients(50); // 50 clientes fictícios
+  const clientUsers: { id: string; name: string }[] = [];
 
-  const totalCapacity = Array.from(employeeSlots.values()).reduce(
-    (acc, arr) => acc + arr.length,
-    0,
-  );
-  console.log(`📅 Capacidade de slots (3 semanas): ${totalCapacity}`);
-
-  // 6) Criar usuários de teste com senha padrão
-  const TARGET_USERS = 50;
-  const MIN_PER_USER = 1; // garantir ao menos 1
-  const MAX_PER_USER = 7; // objetivo 3-7, mas adaptamos à capacidade
-
-  let possibleUsers = TARGET_USERS;
-  if (totalCapacity < TARGET_USERS * MIN_PER_USER) {
-    possibleUsers = Math.max(1, Math.floor(totalCapacity / MIN_PER_USER));
-  }
-
-  const userPassword = await bcrypt.hash('user123', 10);
-  const users = [] as { id: string; name: string }[];
-  for (let i = 1; i <= possibleUsers; i++) {
-    const name = `Test User ${i.toString().padStart(3, '0')}`;
-    const email = `user${i.toString().padStart(3, '0')}@expatriamente.com`;
-    const u = await prisma.user.create({
+  for (const fakeClient of fakeClients) {
+    const clientUser = await prisma.user.create({
       data: {
         clientId: client.id,
-        name,
-        email,
-        password: userPassword,
+        name: fakeClient.name,
+        email: fakeClient.email,
+        phone: fakeClient.phone,
         role: UserRole.CLIENT,
         status: UserStatus.ACTIVE,
+        password: await bcrypt.hash('cliente123', 10),
         emailVerified: true,
         emailVerifiedAt: new Date(),
       },
     });
-    users.push({ id: u.id, name });
+    clientUsers.push({ id: clientUser.id, name: clientUser.name });
   }
-  console.log(`✅ Usuários criados: ${users.length} (senha padrão: user123)`);
+  console.log(`✅ Clientes fictícios criados: ${clientUsers.length}`);
 
-  // 7) Agendar 3–7 por usuário sem colisão por funcionário
-  const booked = new Map<string, Set<string>>(); // employeeId -> Set(ISO)
-  const userBooked = new Map<string, Set<string>>(); // userId -> Set(ISO) para evitar choques do próprio usuário
-  for (const [empId, slots] of employeeSlots) {
-    booked.set(empId, new Set());
-  }
+  // 8) Criar MUITOS agendamentos
+  console.log('📅 Criando agendamentos para semana atual e próximas...');
+  const appointmentDates = generateAppointmentDates();
+  const statuses = [
+    AppointmentStatus.SCHEDULED,
+    AppointmentStatus.CONFIRMED,
+    AppointmentStatus.COMPLETED,
+    AppointmentStatus.IN_PROGRESS,
+  ];
 
-  function tryPickSlot(): { employeeId: string; start: Date } | null {
-    // Filtra somente funcionários com slots disponíveis não reservados
-    const candidates = Array.from(employeeSlots.entries()).filter(([empId, slots]) => {
-      const taken = booked.get(empId) || new Set<string>();
-      return slots.some((s) => !taken.has(s.toISOString()));
-    });
-    if (candidates.length === 0) return null;
+  let appointmentsCreated = 0;
 
-    // Tentar alguns picks aleatórios e, em seguida, fallback linear
-    for (let attempts = 0; attempts < candidates.length * 2; attempts++) {
-      const [empId, slots] = candidates[Math.floor(Math.random() * candidates.length)];
-      const taken = booked.get(empId)!;
-      if (!slots || slots.length === 0) continue;
-      for (let j = 0; j < Math.min(10, slots.length); j++) {
-        const s = slots[Math.floor(Math.random() * slots.length)];
-        if (!s) continue;
-        const iso = s.toISOString();
-        if (!taken.has(iso)) {
-          return { employeeId: empId, start: s };
-        }
-      }
+  for (const startTime of appointmentDates) {
+    // Selecionar cliente e funcionário aleatórios
+    const randomClient = clientUsers[Math.floor(Math.random() * clientUsers.length)];
+    const randomEmployee = createdEmployees[Math.floor(Math.random() * createdEmployees.length)];
+
+    // Calcular endTime (1 hora depois)
+    const endTime = new Date(startTime);
+    endTime.setHours(endTime.getHours() + 1);
+
+    // Status baseado na data (agendamentos passados = COMPLETED, futuros = SCHEDULED/CONFIRMED)
+    let appointmentStatus: AppointmentStatus;
+    const now = new Date();
+    if (startTime < now) {
+      appointmentStatus =
+        Math.random() > 0.8 ? AppointmentStatus.CANCELLED : AppointmentStatus.COMPLETED;
+    } else {
+      appointmentStatus =
+        Math.random() > 0.7 ? AppointmentStatus.CONFIRMED : AppointmentStatus.SCHEDULED;
     }
 
-    // fallback determinístico
-    for (const [empId, slots] of candidates) {
-      const taken = booked.get(empId)!;
-      for (const s of slots) {
-        const iso = s.toISOString();
-        if (!taken.has(iso)) return { employeeId: empId, start: s };
-      }
-    }
-    return null;
-  }
-
-  const createdAppointments: string[] = [];
-  for (const u of users) {
-    // alvo 3–7, mas limitado por capacidade restante
-    const remainingCapacity = totalCapacity - createdAppointments.length;
-    if (remainingCapacity <= 0) break;
-
-    const min = Math.min(3, remainingCapacity); // pelo menos 3 se houver capacidade
-    const max = Math.min(MAX_PER_USER, remainingCapacity);
-    const count = Math.max(1, Math.floor(Math.random() * (max - min + 1)) + min);
-
-    const ub = new Set<string>();
-    userBooked.set(u.id, ub);
-
-    let createdForUser = 0;
-    for (let k = 0; k < count; k++) {
-      const pick = tryPickSlot();
-      if (!pick) break;
-      const iso = pick.start.toISOString();
-      if (ub.has(iso)) {
-        // já tem um no mesmo horário por outro funcionário; pular
-        continue;
-      }
-
-      // marcar como reservado
-      booked.get(pick.employeeId)!.add(iso);
-      ub.add(iso);
-
-      const end = new Date(pick.start);
-      end.setUTCHours(end.getUTCHours() + 1);
-
-      const apt = await prisma.appointment.create({
+    try {
+      await prisma.appointment.create({
         data: {
           clientId: client.id,
-          userId: u.id,
-          employeeId: pick.employeeId,
+          userId: randomClient.id,
+          employeeId: randomEmployee.id,
           serviceId: service.id,
-          startTime: pick.start,
-          endTime: end,
-          status: AppointmentStatus.SCHEDULED,
+          startTime,
+          endTime,
+          status: appointmentStatus,
         },
       });
-      createdAppointments.push(apt.id);
-      createdForUser++;
-    }
-
-    // garantir pelo menos 1 por usuário
-    if (createdForUser === 0) {
-      const pick = tryPickSlot();
-      if (pick) {
-        const iso = pick.start.toISOString();
-        if (!booked.get(pick.employeeId)!.has(iso) && !ub.has(iso)) {
-          booked.get(pick.employeeId)!.add(iso);
-          ub.add(iso);
-          const end = new Date(pick.start);
-          end.setUTCHours(end.getUTCHours() + 1);
-          const apt = await prisma.appointment.create({
-            data: {
-              clientId: client.id,
-              userId: u.id,
-              employeeId: pick.employeeId,
-              serviceId: service.id,
-              startTime: pick.start,
-              endTime: end,
-              status: AppointmentStatus.SCHEDULED,
-            },
-          });
-          createdAppointments.push(apt.id);
-        }
-      }
+      appointmentsCreated++;
+    } catch (error) {
+      // Ignorar erros de conflito de horário
+      console.log(`⚠️ Conflito de horário ignorado para ${startTime.toISOString()}`);
     }
   }
 
-  console.log(`📈 Agendamentos criados: ${createdAppointments.length}`);
-  console.log('🎉 Seed pesado concluído com sucesso.');
+  console.log(`✅ Agendamentos criados: ${appointmentsCreated}`);
+  console.log('🎉 Seed HEAVY finalizado com sucesso para o tenant:', client.id);
+
+  // Estatísticas finais
+  const totalAppointments = await prisma.appointment.count({ where: { clientId: client.id } });
+  const scheduledCount = await prisma.appointment.count({
+    where: { clientId: client.id, status: AppointmentStatus.SCHEDULED },
+  });
+  const confirmedCount = await prisma.appointment.count({
+    where: { clientId: client.id, status: AppointmentStatus.CONFIRMED },
+  });
+  const completedCount = await prisma.appointment.count({
+    where: { clientId: client.id, status: AppointmentStatus.COMPLETED },
+  });
+
+  console.log('📊 Estatísticas finais:');
+  console.log(`   Total de agendamentos: ${totalAppointments}`);
+  console.log(`   Agendados: ${scheduledCount}`);
+  console.log(`   Confirmados: ${confirmedCount}`);
+  console.log(`   Concluídos: ${completedCount}`);
+  console.log(`   Funcionários ativos: ${createdEmployees.length}`);
+  console.log(`   Clientes cadastrados: ${clientUsers.length}`);
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Erro no seed pesado:', e);
+    console.error('❌ Erro no seed:', e);
     process.exit(1);
   })
   .finally(async () => {
