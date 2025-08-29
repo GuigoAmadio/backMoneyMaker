@@ -109,8 +109,8 @@ if [ $failed_tests -eq 0 ]; then
     echo "📈 Próximos passos:"
     echo "1. Verifique os logs: docker-compose logs -f"
     echo "2. Teste os endpoints manualmente:"
-    echo "   - GET http://localhost:3000/health"
-    echo "   - GET http://localhost:3000/metrics"
+    echo "   - GET https://api.expatriamente.com/health"
+    echo "   - GET https://api.expatriamente.com/metrics"
     echo "3. Configure monitoramento em produção"
     echo "4. Implemente testes E2E"
 else

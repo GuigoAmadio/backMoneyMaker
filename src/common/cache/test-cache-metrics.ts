@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 async function main() {
-  const baseUrl = 'http://localhost:3000'; // ajuste se necessário
+  const baseUrl = 'https://api.expatriamente.com'; // ajuste se necessário
   const endpoints = ['/cache/stats', '/metrics', '/metrics/json'];
 
   for (const endpoint of endpoints) {

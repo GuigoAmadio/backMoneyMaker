@@ -436,12 +436,15 @@ export class ServicesService {
         where.categoryId = categoryId;
       }
 
-      if (minPrice !== undefined || maxPrice !== undefined) {
+      if (
+        (minPrice !== undefined && !isNaN(minPrice)) ||
+        (maxPrice !== undefined && !isNaN(maxPrice))
+      ) {
         where.price = {};
-        if (minPrice !== undefined) {
+        if (minPrice !== undefined && !isNaN(minPrice)) {
           where.price.gte = minPrice;
         }
-        if (maxPrice !== undefined) {
+        if (maxPrice !== undefined && !isNaN(maxPrice)) {
           where.price.lte = maxPrice;
         }
       }

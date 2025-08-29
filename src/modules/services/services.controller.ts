@@ -242,6 +242,7 @@ export class ServicesController {
   }
 
   @Get('public')
+  @Roles(UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.SUPER_ADMIN, UserRole.CLIENT)
   @ApiOperation({ summary: 'Listar serviços públicos (para clientes)' })
   @ApiResponse({ status: 200, description: 'Lista de serviços públicos' })
   @ApiQuery({ name: 'search', required: false, description: 'Buscar por nome ou descrição' })

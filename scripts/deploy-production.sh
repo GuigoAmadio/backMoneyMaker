@@ -47,7 +47,7 @@ docker-compose logs --tail=20 app
 # Testar health check
 echo "🏥 Testando health check..."
 sleep 10
-curl -f http://localhost:3000/api/health || echo "⚠️ Health check falhou, verifique os logs"
+curl -f https://api.expatriamente.com/api/health || echo "⚠️ Health check falhou, verifique os logs"
 
 echo ""
 echo "✅ Deploy concluído!"

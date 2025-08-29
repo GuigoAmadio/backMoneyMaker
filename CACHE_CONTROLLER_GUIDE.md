@@ -203,7 +203,7 @@ GET /cache/patterns
 ### Invalidar Cache de Usuários
 
 ```bash
-curl -X POST http://localhost:3000/cache/invalidate \
+curl -X POST https://api.expatriamente.com/cache/invalidate \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"pattern": "user:*"}'
@@ -212,7 +212,7 @@ curl -X POST http://localhost:3000/cache/invalidate \
 ### Limpar Cache de Agendamentos
 
 ```bash
-curl -X POST http://localhost:3000/cache/invalidate \
+curl -X POST https://api.expatriamente.com/cache/invalidate \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"pattern": "appointment:*"}'
@@ -221,14 +221,14 @@ curl -X POST http://localhost:3000/cache/invalidate \
 ### Verificar Estatísticas
 
 ```bash
-curl -X GET http://localhost:3000/cache/stats \
+curl -X GET https://api.expatriamente.com/cache/stats \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ### Listar Chaves de um Cliente Específico
 
 ```bash
-curl -X GET "http://localhost:3000/cache/keys?pattern=client:123:*&limit=10" \
+curl -X GET "https://api.expatriamente.com/cache/keys?pattern=client:123:*&limit=10" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 

@@ -183,6 +183,25 @@ export class CacheEventsService implements OnModuleDestroy {
     };
   }
 
+  // ✅ Obter informações de um cliente específico
+  getClientInfo(clientId: string) {
+    const client = this.clients.get(clientId);
+    if (!client) {
+      return { error: 'Cliente não encontrado' };
+    }
+
+    const now = new Date();
+    return {
+      id: client.id,
+      tenantClientId: client.tenantClientId,
+      userId: client.userId,
+      connectedAt: client.connectedAt,
+      lastActivity: client.lastActivity,
+      uptime: now.getTime() - client.connectedAt.getTime(),
+      isActive: now.getTime() - client.lastActivity.getTime() < 10 * 60 * 1000, // 10 minutos
+    };
+  }
+
   onModuleDestroy() {
     this.destroy$.next();
     this.destroy$.complete();

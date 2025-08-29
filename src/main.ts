@@ -42,10 +42,10 @@ async function bootstrap() {
 
   // CORS configurável - Incluindo domínios de produção
   const corsOrigins = configService.get('CORS_ORIGINS')?.split(',') || [
-    'http://localhost:3000',
+    'https://api.expatriamente.com',
+    'http://localhost:3000', // Expatriamente frontend
     'http://localhost:3001', // BemMeCare frontend
     'http://localhost:3002', // Outros frontends
-    'http://172.16.228.212:3001',
     'https://www.expatriamente.com', // Frontend Expatriamente
     'https://expatriamente.com', // Frontend Expatriamente (sem www)
     'https://api.expatriamente.com', // Backend API
@@ -68,7 +68,7 @@ async function bootstrap() {
       'x-client-id',
       'x-api-key',
       'Cache-Control',
-      'Last-Event-ID',  // Para SSE
+      'Last-Event-ID', // Para SSE
       'Cache-Control', // Para SSE
     ],
   });

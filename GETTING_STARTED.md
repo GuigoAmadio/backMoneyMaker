@@ -19,7 +19,7 @@ Este é um backend SaaS multi-tenant robusto construído com **NestJS + TypeScri
 
 ## 📋 Pré-requisitos
 
-- **Node.js** 18+ 
+- **Node.js** 18+
 - **Docker** e Docker Compose
 - **Git**
 
@@ -51,9 +51,9 @@ npm run docker:up
 
 ### 4. Acessar Aplicação
 
-- **API**: http://localhost:3000
-- **Documentação**: http://localhost:3000/api/docs
-- **Health Check**: http://localhost:3000/api/health
+- **API**: https://api.expatriamente.com
+- **Documentação**: https://api.expatriamente.com/api/docs
+- **Health Check**: https://api.expatriamente.com/api/health
 
 ## 🗃️ Banco de Dados
 
@@ -86,10 +86,12 @@ npm run prisma:seed
 ## 🔑 Credenciais de Teste
 
 **Super Admin:**
+
 - Email: `admin@moneymaker.dev`
 - Senha: `Admin123!@#`
 
 **Admin Demo:**
+
 - Email: `admin@demo.moneymaker.dev`
 - Senha: `Demo123!@#`
 
@@ -98,7 +100,7 @@ npm run prisma:seed
 ### 1. Login (Obter Token)
 
 ```bash
-curl -X POST http://localhost:3000/api/v1/auth/login \
+curl -X POST https://api.expatriamente.com/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -H "x-client-id: clnt_01h3m5k8y7x9p2q3r4s5t6u7v8w9" \
   -d '{
@@ -110,7 +112,7 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
 ### 2. Usar Token nas Requisições
 
 ```bash
-curl -X GET http://localhost:3000/api/v1/users \
+curl -X GET https://api.expatriamente.com/api/v1/users \
   -H "Authorization: Bearer SEU_TOKEN_AQUI" \
   -H "x-client-id: clnt_01h3m5k8y7x9p2q3r4s5t6u7v8w9"
 ```
@@ -203,7 +205,7 @@ cp .env.example .env.production
 ### Configurações Implementadas
 
 - ✅ **Helmet** - Headers de segurança
-- ✅ **CORS** - Configurável por cliente  
+- ✅ **CORS** - Configurável por cliente
 - ✅ **Rate Limiting** - Proteção contra spam
 - ✅ **JWT** - Tokens seguros com expiração
 - ✅ **bcrypt** - Hash seguro de senhas
@@ -225,10 +227,10 @@ cp .env.example .env.production
 
 ```bash
 # Status básico
-curl http://localhost:3000/api/health
+curl https://api.expatriamente.com/api/health
 
 # Status detalhado
-curl http://localhost:3000/api/health | jq
+curl https://api.expatriamente.com/api/health | jq
 ```
 
 ### Logs
@@ -246,6 +248,7 @@ docker-compose logs -f postgres
 ### Problemas Comuns
 
 **1. Erro de conexão com banco:**
+
 ```bash
 # Verificar se PostgreSQL está rodando
 docker-compose ps postgres
@@ -255,16 +258,19 @@ docker-compose down && docker-compose up -d
 ```
 
 **2. Erro "client not found":**
+
 - Verificar se o header `x-client-id` está sendo enviado
 - Confirmar que o cliente existe no banco
 - Verificar se o slug/subdomínio está correto
 
 **3. Erro de autenticação:**
+
 - Verificar se o token JWT não expirou
 - Confirmar que o header `Authorization: Bearer TOKEN` está correto
 - Verificar se o usuário não foi desativado
 
 **4. Erro de permissão:**
+
 - Confirmar que o usuário tem a role necessária
 - Verificar se está acessando recursos do tenant correto
 
@@ -309,4 +315,4 @@ Após configurar o ambiente:
 4. **Monitoramento**: Implemente logs e métricas avançadas
 5. **Testes**: Adicione testes para suas novas funcionalidades
 
-**Happy coding! 🚀** 
+**Happy coding! 🚀**

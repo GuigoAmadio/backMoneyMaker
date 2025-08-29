@@ -123,6 +123,10 @@ import { ServicesModule as NewServicesModule } from './services/services.module'
       provide: APP_INTERCEPTOR,
       useClass: TenantInterceptor,
     },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: CacheInterceptor,
+    },
   ],
 })
 export class AppModule implements NestModule {
