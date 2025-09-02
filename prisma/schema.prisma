@@ -42,6 +42,7 @@ model Client {
   users              User[]
   annotations        Annotation[]
   cacheMetadata      CacheMetadata[]
+  schedules          Schedule[]
 
   @@map("clients")
 }
@@ -75,6 +76,7 @@ model User {
   employees                   Employee[]
   employee                    Employee?       @relation("UserEmployee", fields: [employeeId], references: [id], onDelete: SetNull)
   annotations                 Annotation[]
+  schedules                   Schedule[]
 
   @@unique([clientId, email])
   @@unique([clientId, employeeId])
@@ -117,6 +119,7 @@ model Employee {
   userEmployee User[]        @relation("UserEmployee")
   services     Service[]     @relation("EmployeeToService")
   annotations  Annotation[]
+  schedules    Schedule[]
 
   @@unique([clientId, email])
   @@unique([clientId, userId])
@@ -970,6 +973,71 @@ enum CouponType {
   PERCENTAGE
   FIXED
   FREE_SHIPPING
+}
+
+enum ScheduleStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  POSTPONED
+}
+
+enum SchedulePriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ScheduleCategory {
+  WORK
+  PERSONAL
+  MEETING
+  APPOINTMENT
+  REMINDER
+  OTHER
+}
+
+model Schedule {
+  id                String             @id @default(uuid())
+  clientId          String             @map("client_id")
+  userId            String             @map("user_id")
+  employeeId        String?            @map("employee_id")
+  date              DateTime           // Data específica do calendário
+  title             String
+  description       String?
+  tasks             Json               @default("[]") // Array de tarefas do dia
+  status            ScheduleStatus     @default(PENDING)
+  priority          SchedulePriority   @default(MEDIUM)
+  startTime         DateTime?          @map("start_time")
+  endTime           DateTime?          @map("end_time")
+  allDay            Boolean            @default(false) @map("all_day")
+  isRecurring       Boolean            @default(false) @map("is_recurring")
+  recurringPattern  Json?              @map("recurring_pattern") // Padrão de recorrência
+  color             String?            // Cor para categorização visual
+  category          ScheduleCategory   @default(WORK)
+  reminders         Json               @default("[]") // Configurações de lembretes
+  attachments       String[]           @default([]) // URLs de anexos
+  isPublic          Boolean            @default(false) @map("is_public")
+  completedAt       DateTime?          @map("completed_at")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  // Relacionamentos
+  client   Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  // Índices para performance
+  @@index([clientId, date]) // Busca por data
+  @@index([clientId, userId, date]) // Busca por usuário e data
+  @@index([clientId, status]) // Filtros por status
+  @@index([clientId, priority]) // Filtros por prioridade
+  @@index([clientId, category]) // Filtros por categoria
+  @@index([employeeId, date]) // Agenda do funcionário
+  @@unique([clientId, userId, date]) // Um registro por usuário por dia
+  @@map("schedules")
 }
 
 // ✅ Cache Metadata para sistema de cache inteligente do frontend
