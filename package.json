@@ -45,7 +45,8 @@
     "prisma:seed-expatriamente": "ts-node prisma/seed-expatriamente-updated.ts",
     "prisma:seed-expatriamente-heavy": "ts-node prisma/seed-expatriamente-heavy.ts",
     "prisma:seed-expatriamente-users": "ts-node prisma/seed-expatriamente-users.ts",
-    "prisma:set-passwords": "ts-node prisma/set-default-passwords.ts"
+    "prisma:set-passwords": "ts-node prisma/set-default-passwords.ts",
+    "prisma:seed-migrate": "ts-node prisma/seed-migrate-working-hours.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",

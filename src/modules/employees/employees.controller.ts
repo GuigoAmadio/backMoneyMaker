@@ -186,7 +186,7 @@ export class EmployeesController {
   @Get(':id')
   @Public()
   @Cacheable({
-    key: 'employees:detail',
+    key: 'employees:detail:${id}',
     ttl: 600, // 10 minutos
     tags: ['employees', 'detail'],
   })
@@ -234,7 +234,7 @@ export class EmployeesController {
   }
 
   @Patch(':id')
-  @CacheInvalidate('employees:list')
+  @CacheInvalidate('employees:detail')
   @ApiOperation({ summary: 'Atualizar funcionário' })
   @ApiResponse({ status: 200, description: 'Funcionário atualizado com sucesso' })
   @ApiResponse({ status: 404, description: 'Funcionário não encontrado' })
@@ -262,7 +262,7 @@ export class EmployeesController {
   }
 
   @Delete(':id')
-  @CacheInvalidate('employees:list')
+  @CacheInvalidate('employees:detail')
   @ApiOperation({ summary: 'Deletar funcionário' })
   @ApiResponse({ status: 200, description: 'Funcionário deletado com sucesso' })
   @ApiResponse({ status: 404, description: 'Funcionário não encontrado' })

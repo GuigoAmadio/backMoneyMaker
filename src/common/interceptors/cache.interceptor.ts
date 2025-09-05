@@ -56,15 +56,32 @@ export class CacheInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest();
     const { params, query, body } = request;
 
-    // Incluir parâmetros relevantes na chave
-    const paramsString = JSON.stringify({
-      params: params || {},
-      query: query || {},
-      // Não incluir body completo para evitar chaves muito longas
-      bodyKeys: body ? Object.keys(body) : [],
-    });
+    // ✅ NOVO: Substituir variáveis na chave base
+    let processedKey = baseKey;
+    // Substituir ${id} pelo valor real do parâmetro
+    if (params?.id && processedKey.includes('${id}')) {
+      processedKey = processedKey.replace('${id}', params.id);
+    }
 
-    return `${baseKey}:${this.hashString(paramsString)}`;
+    // Substituir ${clientId} se necessário
+    if (request.user?.clientId && processedKey.includes('${clientId}')) {
+      processedKey = processedKey.replace('${clientId}', request.user.clientId);
+    }
+
+    // Incluir parâmetros relevantes na chave (apenas se ainda houver variáveis não resolvidas)
+    const hasUnresolvedVariables = processedKey.includes('${');
+
+    if (hasUnresolvedVariables) {
+      const paramsString = JSON.stringify({
+        params: params || {},
+        query: query || {},
+        bodyKeys: body ? Object.keys(body) : [],
+      });
+      return `${processedKey}:${this.hashString(paramsString)}`;
+    }
+
+    // Se todas as variáveis foram resolvidas, usar a chave diretamente
+    return processedKey;
   }
 
   private hashString(str: string): string {

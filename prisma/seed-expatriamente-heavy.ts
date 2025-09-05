@@ -64,51 +64,114 @@ function generateEmail(nome: string): string {
 // Gera usuários clientes fictícios
 function generateFakeClients(count: number) {
   const firstNames = [
-    'Ana', 'Carlos', 'Maria', 'João', 'Patricia', 'Roberto', 'Fernanda', 'Ricardo',
-    'Claudia', 'Daniel', 'Juliana', 'Pedro', 'Camila', 'Rafael', 'Luciana', 'Thiago',
-    'Beatriz', 'Gustavo', 'Adriana', 'Marcelo', 'Renata', 'Felipe', 'Carla', 'Diego',
-    'Priscila', 'Bruno', 'Natalia', 'Leonardo', 'Monica', 'Andre', 'Fabiana', 'Lucas',
-    'Tatiana', 'Rodrigo', 'Cristina', 'Victor', 'Simone', 'Alexandre', 'Vanessa', 'Sergio'
+    'Ana',
+    'Carlos',
+    'Maria',
+    'João',
+    'Patricia',
+    'Roberto',
+    'Fernanda',
+    'Ricardo',
+    'Claudia',
+    'Daniel',
+    'Juliana',
+    'Pedro',
+    'Camila',
+    'Rafael',
+    'Luciana',
+    'Thiago',
+    'Beatriz',
+    'Gustavo',
+    'Adriana',
+    'Marcelo',
+    'Renata',
+    'Felipe',
+    'Carla',
+    'Diego',
+    'Priscila',
+    'Bruno',
+    'Natalia',
+    'Leonardo',
+    'Monica',
+    'Andre',
+    'Fabiana',
+    'Lucas',
+    'Tatiana',
+    'Rodrigo',
+    'Cristina',
+    'Victor',
+    'Simone',
+    'Alexandre',
+    'Vanessa',
+    'Sergio',
   ];
 
   const lastNames = [
-    'Silva', 'Santos', 'Oliveira', 'Souza', 'Rodrigues', 'Ferreira', 'Alves', 'Pereira',
-    'Lima', 'Gomes', 'Costa', 'Ribeiro', 'Martins', 'Carvalho', 'Almeida', 'Lopes',
-    'Soares', 'Fernandes', 'Vieira', 'Barbosa', 'Rocha', 'Dias', 'Monteiro', 'Cardoso',
-    'Reis', 'Araujo', 'Correia', 'Pinto', 'Teixeira', 'Machado', 'Castro', 'Freitas'
+    'Silva',
+    'Santos',
+    'Oliveira',
+    'Souza',
+    'Rodrigues',
+    'Ferreira',
+    'Alves',
+    'Pereira',
+    'Lima',
+    'Gomes',
+    'Costa',
+    'Ribeiro',
+    'Martins',
+    'Carvalho',
+    'Almeida',
+    'Lopes',
+    'Soares',
+    'Fernandes',
+    'Vieira',
+    'Barbosa',
+    'Rocha',
+    'Dias',
+    'Monteiro',
+    'Cardoso',
+    'Reis',
+    'Araujo',
+    'Correia',
+    'Pinto',
+    'Teixeira',
+    'Machado',
+    'Castro',
+    'Freitas',
   ];
 
   const clients = [];
   const usedEmails = new Set<string>(); // Para garantir emails únicos
-  
+
   for (let i = 0; i < count; i++) {
     let email: string;
     let fullName: string;
     let attempts = 0;
-    
+
     // Tentar até 10 vezes para gerar um email único
     do {
       const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
       const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
       fullName = `${firstName} ${lastName}`;
-      
+
       // Se for tentativa > 1, adicionar um número ao final
       if (attempts > 0) {
         email = generateEmail(`${fullName}${attempts}`);
       } else {
         email = generateEmail(fullName);
       }
-      
+
       attempts++;
     } while (usedEmails.has(email) && attempts < 10);
-    
+
     // Se ainda tiver conflito após 10 tentativas, usar timestamp
     if (usedEmails.has(email)) {
       email = generateEmail(`${fullName}${Date.now()}${i}`);
     }
-    
+
     usedEmails.add(email);
-    
+
     clients.push({
       name: fullName,
       email: email,
