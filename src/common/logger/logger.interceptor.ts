@@ -22,6 +22,13 @@ export class LoggerInterceptor implements NestInterceptor {
       userAgent: request.get('User-Agent'),
     });
 
+    // Este trecho de código é responsável por registrar logs após o processamento da requisição HTTP.
+    // Ele é executado logo após o logger de "incoming" (entrada), que ocorre antes da execução do controller.
+    // Aqui, usamos o operador `tap` do RxJS para capturar a resposta (ou erro) assim que ela é emitida pelo controller ou serviço.
+    // O logger de "outgoing" (saída) registra informações como método, URL, status da resposta, tempo de execução e tamanho da resposta.
+    // Se ocorrer um erro durante o processamento, o operador `catchError` captura o erro, registra um log detalhado e relança o erro.
+    // Portanto, este trecho é executado após o logger de incoming, no momento em que a resposta está sendo enviada ao cliente (ou quando ocorre um erro).
+
     return next.handle().pipe(
       tap((data) => {
         const duration = Date.now() - startTime;

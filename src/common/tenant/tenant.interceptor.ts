@@ -29,7 +29,6 @@ export class TenantInterceptor implements NestInterceptor {
     try {
       // Pular verificação para rotas de health check e documentação
       if (this.shouldSkipTenantCheck(request.path)) {
-        this.logger.log(`=== TenantInterceptor: Pulando verificação para ${request.path} ===`);
         return next.handle();
       }
 
@@ -37,22 +36,6 @@ export class TenantInterceptor implements NestInterceptor {
 
       // 1. Tentar extrair do header x-client-id
       clientId = request.headers['x-client-id'] as string;
-      this.logger.log(`=== TenantInterceptor: clientId do header: ${clientId} ===`);
-
-      // 2. Se não encontrar, tentar extrair do subdomínio
-      if (!clientId) {
-        const host = request.headers.host;
-        this.logger.log(`=== TenantInterceptor: host: ${host} ===`);
-        if (host && host.includes('.')) {
-          const subdomain = host.split('.')[0];
-          this.logger.log(`=== TenantInterceptor: subdomain: ${subdomain} ===`);
-          if (subdomain && subdomain !== 'api' && subdomain !== 'www') {
-            // Buscar clientId pelo slug/subdomínio
-            clientId = await this.tenantService.getClientIdBySlug(subdomain);
-            this.logger.log(`=== TenantInterceptor: clientId do subdomain: ${clientId} ===`);
-          }
-        }
-      }
 
       // 3. Se ainda não encontrar, verificar se é uma rota que requer tenant
       if (!clientId && this.requiresTenant(request.path)) {
@@ -101,6 +84,7 @@ export class TenantInterceptor implements NestInterceptor {
       '/api/v1/products',
       '/api/v1/dashboard',
       '/api/v1/clients',
+      '/api/v1/schedules',
       '/api/v1/cache-events/stream',
     ];
 

@@ -28,11 +28,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
 
     this.logger.log('JwtStrategy sendo inicializada');
-    this.logger.log(`JWT_SECRET configurado: ${jwtSecret ? 'SIM' : 'NÃO'}`);
   }
 
   async validate(payload: JwtPayload) {
-    this.logger.log('JwtStrategy.validate iniciado');
     this.logger.log(`Payload recebido: ${JSON.stringify(payload)}`);
 
     if (!payload || !payload.sub) {
@@ -58,13 +56,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Usuário não encontrado');
     }
 
-    this.logger.log(`Status do usuário: ${user.status}`);
     if (user.status !== 'ACTIVE') {
       this.logger.error(`Usuário inativo: ${user.id}`);
       throw new UnauthorizedException('Usuário inativo');
     }
 
-    this.logger.log(`Status do cliente: ${user.client?.status}`);
     if (user.client?.status !== 'ACTIVE') {
       this.logger.error(`Cliente inativo: ${user.client?.id}`);
       throw new UnauthorizedException('Cliente inativo');

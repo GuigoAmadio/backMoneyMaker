@@ -29,17 +29,13 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       context.getClass(),
     ]);
 
-    this.logger.log(`=== JwtAuthGuard: Rota é pública? ${isPublic} ===`);
-
     if (isPublic) {
       this.logger.log('=== JwtAuthGuard: Rota pública, permitindo acesso ===');
       return true;
     }
 
     // Executar autenticação JWT padrão
-    this.logger.log('=== JwtAuthGuard: Executando autenticação JWT ===');
     const canActivate = await super.canActivate(context);
-    this.logger.log(`=== JwtAuthGuard: Autenticação JWT resultou em: ${canActivate} ===`);
 
     if (!canActivate) {
       this.logger.error('=== JwtAuthGuard: Autenticação JWT falhou ===');
@@ -50,7 +46,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     const user = request.user;
 
     this.logger.log(
-      `=== JwtAuthGuard: Usuário decodificado: ${user?.id} (${user?.email}) - Role: ${user?.role} - ClientId: ${user?.clientId} ===`,
+      `=== JwtAuthGuard: Usuário decodificado: ${user?.id}, sub: ${user?.sub}, (${user?.email}) - Role: ${user?.role} - ClientId: ${user?.clientId} ===`,
     );
 
     // Verificar se o usuário tem acesso ao tenant correto
@@ -61,7 +57,6 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
     // Verificar se o cliente ainda está ativo
     if (user.clientId) {
-      this.logger.log(`=== JwtAuthGuard: Validando cliente: ${user.clientId} ===`);
       const isClientValid = await this.tenantService.validateClient(user.clientId);
       this.logger.log(`=== JwtAuthGuard: Cliente válido? ${isClientValid} ===`);
 
@@ -71,7 +66,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       }
     }
 
-    this.logger.log('=== JwtAuthGuard: Acesso permitido ===');
+    this.logger.log(
+      `=== JwtAuthGuard: Acesso permitido, indo para controller, usuário COMPLETOOOOOOOOOO: ${JSON.stringify(user)}`,
+    );
     return true;
   }
 

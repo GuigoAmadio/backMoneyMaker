@@ -15,6 +15,7 @@ export class TenantGuard implements CanActivate {
 
     // Adicionar o clientId à requisição para uso posterior
     request.clientId = clientId;
+    
 
     return true;
   }

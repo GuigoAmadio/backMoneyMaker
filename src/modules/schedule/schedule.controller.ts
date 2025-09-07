@@ -11,6 +11,7 @@ import {
   Request,
   HttpCode,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -30,6 +31,8 @@ import { CreateScheduleDto, UpdateScheduleDto, GetSchedulesDto, ScheduleStatus }
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, TenantGuard)
 export class ScheduleController {
+  private readonly logger = new Logger(ScheduleController.name);
+
   constructor(private readonly scheduleService: ScheduleService) {}
 
   @Post()
@@ -38,7 +41,8 @@ export class ScheduleController {
   @ApiResponse({ status: 400, description: 'Dados inválidos' })
   @ApiResponse({ status: 409, description: 'Conflito - agenda já existe para esta data' })
   async create(@Request() req, @Body() createScheduleDto: CreateScheduleDto) {
-    const { clientId, userId } = req.user;
+    this.logger.log(`req.user: ${JSON.stringify(req.user)}`);
+    const { clientId, id: userId } = req.user;
     return this.scheduleService.create(clientId, userId, createScheduleDto);
   }
 
@@ -64,7 +68,7 @@ export class ScheduleController {
   @ApiQuery({ name: 'sortBy', required: false, description: 'Campo para ordenação (padrão: date)' })
   @ApiQuery({ name: 'sortOrder', required: false, description: 'Ordem (asc/desc, padrão: asc)' })
   async findAll(@Request() req, @Query() query: GetSchedulesDto) {
-    const { clientId, userId } = req.user;
+    const { clientId, id: userId } = req.user;
     return this.scheduleService.findAll(clientId, userId, query);
   }
 
@@ -72,7 +76,7 @@ export class ScheduleController {
   @ApiOperation({ summary: 'Obter agendas de hoje' })
   @ApiResponse({ status: 200, description: 'Agendas de hoje retornadas com sucesso' })
   async getTodaySchedules(@Request() req) {
-    const { clientId, userId } = req.user;
+    const { clientId, id: userId } = req.user;
     return this.scheduleService.getTodaySchedules(clientId, userId);
   }
 
@@ -80,7 +84,7 @@ export class ScheduleController {
   @ApiOperation({ summary: 'Obter estatísticas das agendas' })
   @ApiResponse({ status: 200, description: 'Estatísticas retornadas com sucesso' })
   async getScheduleStats(@Request() req) {
-    const { clientId, userId } = req.user;
+    const { clientId, id: userId } = req.user;
     return this.scheduleService.getScheduleStats(clientId, userId);
   }
 
@@ -90,7 +94,7 @@ export class ScheduleController {
   @ApiResponse({ status: 404, description: 'Agenda não encontrada' })
   @ApiParam({ name: 'id', description: 'ID da agenda' })
   async findOne(@Request() req, @Param('id') id: string) {
-    const { clientId, userId } = req.user;
+    const { clientId, id: userId } = req.user;
     return this.scheduleService.findOne(id, clientId, userId);
   }
 
@@ -104,7 +108,7 @@ export class ScheduleController {
     @Param('id') id: string,
     @Body() updateScheduleDto: UpdateScheduleDto,
   ) {
-    const { clientId, userId } = req.user;
+    const { clientId, id: userId } = req.user;
     return this.scheduleService.update(id, clientId, userId, updateScheduleDto);
   }
 
@@ -118,7 +122,7 @@ export class ScheduleController {
     @Param('id') id: string,
     @Body() body: { status: ScheduleStatus },
   ) {
-    const { clientId, userId } = req.user;
+    const { clientId, id: userId } = req.user;
     return this.scheduleService.updateStatus(id, clientId, userId, body.status);
   }
 
@@ -129,7 +133,7 @@ export class ScheduleController {
   @ApiResponse({ status: 404, description: 'Agenda não encontrada' })
   @ApiParam({ name: 'id', description: 'ID da agenda' })
   async remove(@Request() req, @Param('id') id: string) {
-    const { clientId, userId } = req.user;
+    const { clientId, id: userId } = req.user;
     return this.scheduleService.remove(id, clientId, userId);
   }
 }

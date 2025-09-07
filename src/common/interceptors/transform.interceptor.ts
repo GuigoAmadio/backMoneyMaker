@@ -39,9 +39,8 @@ export class TransformInterceptor<T> implements NestInterceptor<T, Response<T>> 
         return {
           success: true,
           data,
-          timestamp: new Date().toISOString(),
-          path: request.url,
-          method: request.method,
+          message: null,
+          error: null,
         };
       }),
       tap(() => {
