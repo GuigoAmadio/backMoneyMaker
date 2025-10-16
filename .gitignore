@@ -1,5 +1,5 @@
-# Logs
-logs
+# Logs (arquivos e pasta raiz, não módulos)
+/logs/
 *.log
 npm-debug.log*
 pnpm-debug.log*
