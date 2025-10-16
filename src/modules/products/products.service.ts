@@ -251,231 +251,231 @@ export class ProductsService {
    * Listar produtos com filtros
    */
   async findAll(clientId: string, filters: any = {}) {
-    console.log('🔍 [ProductsService] findAll chamado com:', { clientId, filters });
+    this.logger.log(`Listando produtos para clientId: ${clientId}`);
+    this.logger.debug(`Filtros recebidos: ${JSON.stringify(filters)}`);
 
-    const {
-      category,
-      search,
-      isActive,
-      lowStock,
-      minPrice,
-      maxPrice,
-      page = 1,
-      limit = 10,
-    } = filters;
-    console.log('📋 [ProductsService] Filtros extraídos:', {
-      category,
-      search,
-      isActive,
-      lowStock,
-      minPrice,
-      maxPrice,
-      page,
-      limit,
-    });
+    try {
+      const {
+        category,
+        search,
+        isActive,
+        lowStock,
+        minPrice,
+        maxPrice,
+        page = 1,
+        limit = 10,
+      } = filters;
 
-    const where: any = { clientId };
-    console.log('🎯 [ProductsService] Where inicial:', where);
+      const where: any = { clientId };
 
-    // Aplicar filtros apenas se não forem undefined
-    if (category) where.categoryId = category;
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-        { sku: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-    // Só aplicar filtro isActive se for explicitamente especificado
-    if (isActive !== undefined && isActive !== null && isActive !== '') {
-      where.isActive = isActive;
-    }
-    if (lowStock !== undefined && lowStock !== null && lowStock === true) {
-      where.stock = { lte: 10 }; // Produtos com estoque menor ou igual a 10
-    }
+      // Aplicar filtros apenas se não forem undefined
+      if (category) {
+        where.categoryId = category;
+        this.logger.debug(`Filtro de categoria aplicado: ${category}`);
+      }
 
-    // Filtros de preço
-    if (minPrice !== undefined && minPrice > 0) {
-      where.price = { ...where.price, gte: minPrice };
-    }
-    if (maxPrice !== undefined && maxPrice > 0) {
-      where.price = { ...where.price, lte: maxPrice };
-    }
+      if (search) {
+        where.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+          { sku: { contains: search, mode: 'insensitive' } },
+        ];
+        this.logger.debug(`Filtro de busca aplicado: ${search}`);
+      }
 
-    console.log('🔍 [ProductsService] Where final:', JSON.stringify(where, null, 2));
+      // Só aplicar filtro isActive se for explicitamente especificado
+      if (isActive !== undefined && isActive !== null && isActive !== '') {
+        where.isActive = isActive;
+        this.logger.debug(`Filtro isActive aplicado: ${isActive}`);
+      }
 
-    const [products, total] = await Promise.all([
-      this.prisma.product.findMany({
-        where,
-        include: {
-          category: {
-            select: {
-              name: true,
+      if (lowStock !== undefined && lowStock !== null && lowStock === true) {
+        where.stock = { lte: 10 }; // Produtos com estoque menor ou igual a 10
+        this.logger.debug('Filtro de estoque baixo aplicado');
+      }
+
+      // Filtros de preço
+      if (minPrice !== undefined && minPrice > 0) {
+        where.price = { ...where.price, gte: minPrice };
+        this.logger.debug(`Filtro de preço mínimo aplicado: ${minPrice}`);
+      }
+      if (maxPrice !== undefined && maxPrice > 0) {
+        where.price = { ...where.price, lte: maxPrice };
+        this.logger.debug(`Filtro de preço máximo aplicado: ${maxPrice}`);
+      }
+
+      this.logger.debug(`Query WHERE final: ${JSON.stringify(where)}`);
+
+      const [products, total] = await Promise.all([
+        this.prisma.product.findMany({
+          where,
+          include: {
+            category: {
+              select: {
+                name: true,
+              },
             },
           },
+          skip: (page - 1) * limit,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+        }),
+        this.prisma.product.count({ where }),
+      ]);
+
+      this.logger.log(
+        `Produtos encontrados: ${products.length} de ${total} total (página ${page}/${Math.ceil(total / limit)})`,
+      );
+
+      const result = {
+        success: true,
+        data: products.map((product) => ({
+          ...product,
+          price: Number(product.price),
+          category: product.category?.name || 'Sem categoria',
+          isOutOfStock: product.stock === 0,
+          image: product.image || null,
+        })),
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
         },
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.product.count({ where }),
-    ]);
+      };
 
-    console.log('📦 [ProductsService] Produtos encontrados:', products.length);
-    console.log('📊 [ProductsService] Total de produtos:', total);
-    console.log(
-      '📋 [ProductsService] Produtos:',
-      JSON.stringify(
-        products.map((p) => ({ id: p.id, name: p.name, clientId: p.clientId })),
-        null,
-        2,
-      ),
-    );
-
-    return {
-      success: true,
-      data: products.map((product) => ({
-        ...product,
-        price: Number(product.price),
-        category: product.category?.name || 'Sem categoria',
-        isOutOfStock: product.stock === 0,
-        image: product.image || null,
-      })),
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-
-    const result = {
-      success: true,
-      data: products.map((product) => ({
-        ...product,
-        price: Number(product.price),
-        category: product.category?.name || 'Sem categoria',
-        isOutOfStock: product.stock === 0,
-        image: product.image || null,
-      })),
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-
-    console.log('✅ [ProductsService] Retornando resultado:', JSON.stringify(result, null, 2));
-
-    return result;
+      return result;
+    } catch (error) {
+      this.logger.error(`Erro ao listar produtos para clientId: ${clientId}`, error.stack);
+      throw error;
+    }
   }
 
   /**
    * Buscar produto por ID
    */
   async findOne(id: string, clientId: string) {
-    const product = await this.prisma.product.findFirst({
-      where: { id, clientId },
-      include: {
-        category: {
-          select: {
-            id: true,
-            name: true,
+    this.logger.log(`Buscando produto: ${id} para clientId: ${clientId}`);
+
+    try {
+      const product = await this.prisma.product.findFirst({
+        where: { id, clientId },
+        include: {
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
-        },
-        orderItems: {
-          select: {
-            quantity: true,
-            subtotal: true,
-            order: {
-              select: {
-                createdAt: true,
-                paymentStatus: true,
+          orderItems: {
+            select: {
+              quantity: true,
+              subtotal: true,
+              order: {
+                select: {
+                  createdAt: true,
+                  paymentStatus: true,
+                },
+              },
+            },
+            where: {
+              order: {
+                paymentStatus: 'PAID',
               },
             },
           },
-          where: {
-            order: {
-              paymentStatus: 'PAID',
-            },
+        },
+      });
+
+      if (!product) {
+        this.logger.warn(`Produto não encontrado: ${id} para clientId: ${clientId}`);
+        throw new NotFoundException('Produto não encontrado');
+      }
+
+      // Calcular estatísticas de vendas
+      const totalSold = product.orderItems.reduce((sum, item) => sum + item.quantity, 0);
+      const totalRevenue = product.orderItems.reduce((sum, item) => sum + Number(item.subtotal), 0);
+
+      this.logger.log(`Produto encontrado: ${product.name} (ID: ${id})`);
+      this.logger.debug(
+        `Estatísticas - Total vendido: ${totalSold}, Receita: R$ ${totalRevenue.toFixed(2)}`,
+      );
+
+      return {
+        success: true,
+        data: {
+          ...product,
+          price: Number(product.price),
+          categoryId: product.categoryId,
+          category: product.category,
+          images: product.image ? [product.image] : [],
+          isActive: product.isActive,
+          createdAt: product.createdAt,
+          updatedAt: product.updatedAt,
+          stats: {
+            totalSold,
+            totalRevenue,
+            lastSaleDate:
+              product.orderItems.length > 0
+                ? product.orderItems[product.orderItems.length - 1].order.createdAt
+                : null,
           },
         },
-      },
-    });
-
-    if (!product) {
-      throw new NotFoundException('Produto não encontrado');
+      };
+    } catch (error) {
+      this.logger.error(`Erro ao buscar produto ${id} para clientId: ${clientId}`, error.stack);
+      throw error;
     }
-
-    // Calcular estatísticas de vendas
-    const totalSold = product.orderItems.reduce((sum, item) => sum + item.quantity, 0);
-    const totalRevenue = product.orderItems.reduce((sum, item) => sum + Number(item.subtotal), 0);
-
-    return {
-      success: true,
-      data: {
-        ...product,
-        price: Number(product.price),
-        categoryId: product.categoryId,
-        category: product.category,
-        images: product.image ? [product.image] : [],
-        isActive: product.isActive,
-        createdAt: product.createdAt,
-        updatedAt: product.updatedAt,
-        stats: {
-          totalSold,
-          totalRevenue,
-          lastSaleDate:
-            product.orderItems.length > 0
-              ? product.orderItems[product.orderItems.length - 1].order.createdAt
-              : null,
-        },
-      },
-    };
   }
 
   /**
    * Criar produto
    */
   async create(data: any, clientId: string) {
-    console.log('🔄 [ProductsService] create chamado com:', { data, clientId });
-
-    // Validar dados obrigatórios
-    if (!data.name) {
-      throw new Error('Nome do produto é obrigatório');
-    }
-
-    if (!data.price || isNaN(Number(data.price))) {
-      throw new Error('Preço do produto é obrigatório e deve ser um número válido');
-    }
-
-    // Verificar se a categoria existe se for fornecida
-    if (data.categoryId) {
-      const categoryExists = await this.prisma.category.findFirst({
-        where: {
-          id: data.categoryId,
-          clientId: clientId,
-        },
-      });
-
-      if (!categoryExists) {
-        console.warn('⚠️ [ProductsService] Categoria não encontrada:', data.categoryId);
-        // Não falhar, apenas remover o categoryId
-        delete data.categoryId;
-      }
-    }
-
-    const cleanedData = cleanData({
-      ...data,
-      clientId,
-      price: Number(data.price),
-      stock: Number(data.stock) || 0,
-    });
-
-    console.log('🧹 [ProductsService] Dados limpos:', cleanedData);
+    this.logger.log(`Criando novo produto para clientId: ${clientId}`);
+    this.logger.debug(`Dados recebidos: ${JSON.stringify(data)}`);
 
     try {
+      // Validar dados obrigatórios
+      if (!data.name) {
+        this.logger.warn('Tentativa de criar produto sem nome');
+        throw new Error('Nome do produto é obrigatório');
+      }
+
+      if (!data.price || isNaN(Number(data.price))) {
+        this.logger.warn(`Tentativa de criar produto com preço inválido: ${data.price}`);
+        throw new Error('Preço do produto é obrigatório e deve ser um número válido');
+      }
+
+      // Verificar se a categoria existe se for fornecida
+      if (data.categoryId) {
+        const categoryExists = await this.prisma.category.findFirst({
+          where: {
+            id: data.categoryId,
+            clientId: clientId,
+          },
+        });
+
+        if (!categoryExists) {
+          this.logger.warn(
+            `Categoria não encontrada: ${data.categoryId}, será removida do produto`,
+          );
+          // Não falhar, apenas remover o categoryId
+          delete data.categoryId;
+        } else {
+          this.logger.debug(`Categoria validada: ${data.categoryId}`);
+        }
+      }
+
+      const cleanedData = cleanData({
+        ...data,
+        clientId,
+        price: Number(data.price),
+        stock: Number(data.stock) || 0,
+      });
+
+      this.logger.debug(`Dados limpos: ${JSON.stringify(cleanedData)}`);
+
       const product = await this.prisma.product.create({
         data: cleanedData,
         include: {
@@ -488,7 +488,10 @@ export class ProductsService {
         },
       });
 
-      console.log('✅ [ProductsService] Produto criado com sucesso:', product);
+      this.logger.log(`Produto criado com sucesso: ${product.name} (ID: ${product.id})`);
+
+      // Invalidar cache de produtos
+      await this.cacheService.invalidateByTags(['products', 'stats']);
 
       return {
         success: true,
@@ -499,7 +502,7 @@ export class ProductsService {
         message: 'Produto criado com sucesso',
       };
     } catch (error) {
-      console.error('❌ [ProductsService] Erro ao criar produto:', error);
+      this.logger.error(`Erro ao criar produto para clientId: ${clientId}`, error.stack);
       throw error;
     }
   }
@@ -508,139 +511,213 @@ export class ProductsService {
    * Atualizar produto
    */
   async update(id: string, data: any, clientId: string) {
-    const existingProduct = await this.prisma.product.findFirst({
-      where: { id, clientId },
-    });
+    this.logger.log(`Atualizando produto: ${id} para clientId: ${clientId}`);
+    this.logger.debug(`Dados de atualização: ${JSON.stringify(data)}`);
 
-    if (!existingProduct) {
-      throw new NotFoundException('Produto não encontrado');
-    }
+    try {
+      const existingProduct = await this.prisma.product.findFirst({
+        where: { id, clientId },
+      });
 
-    const updatedData = cleanData({
-      ...data,
-      price: data.price !== undefined ? Number(data.price) : undefined,
-      stock: data.stock !== undefined ? Number(data.stock) : undefined,
-    });
+      if (!existingProduct) {
+        this.logger.warn(`Produto não encontrado para atualização: ${id}`);
+        throw new NotFoundException('Produto não encontrado');
+      }
 
-    const product = await this.prisma.product.update({
-      where: { id },
-      data: updatedData,
-      include: {
-        category: {
-          select: {
-            id: true,
-            name: true,
+      this.logger.debug(`Produto encontrado: ${existingProduct.name}`);
+
+      const updatedData = cleanData({
+        ...data,
+        price: data.price !== undefined ? Number(data.price) : undefined,
+        stock: data.stock !== undefined ? Number(data.stock) : undefined,
+      });
+
+      this.logger.debug(`Dados limpos para atualização: ${JSON.stringify(updatedData)}`);
+
+      const product = await this.prisma.product.update({
+        where: { id },
+        data: updatedData,
+        include: {
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    return {
-      success: true,
-      data: {
-        ...product,
-        price: Number(product.price),
-      },
-      message: 'Produto atualizado com sucesso',
-    };
+      this.logger.log(`Produto atualizado com sucesso: ${product.name} (ID: ${id})`);
+
+      // Invalidar cache de produtos
+      await this.cacheService.invalidateByTags(['products', 'stats']);
+
+      return {
+        success: true,
+        data: {
+          ...product,
+          price: Number(product.price),
+        },
+        message: 'Produto atualizado com sucesso',
+      };
+    } catch (error) {
+      this.logger.error(`Erro ao atualizar produto ${id} para clientId: ${clientId}`, error.stack);
+      throw error;
+    }
   }
 
   /**
    * Deletar produto
    */
   async remove(id: string, clientId: string) {
-    const product = await this.prisma.product.findFirst({
-      where: { id, clientId },
-    });
+    this.logger.log(`Tentando deletar produto: ${id} para clientId: ${clientId}`);
 
-    if (!product) {
-      throw new NotFoundException('Produto não encontrado');
+    try {
+      const product = await this.prisma.product.findFirst({
+        where: { id, clientId },
+      });
+
+      if (!product) {
+        this.logger.warn(`Produto não encontrado para deleção: ${id}`);
+        throw new NotFoundException('Produto não encontrado');
+      }
+
+      this.logger.debug(`Produto encontrado: ${product.name}, verificando dependências...`);
+
+      // Verificar se existem pedidos relacionados
+      const relatedOrders = await this.prisma.orderItem.findFirst({
+        where: { productId: id },
+      });
+
+      if (relatedOrders) {
+        this.logger.warn(
+          `Tentativa de deletar produto ${id} com pedidos relacionados - operação negada`,
+        );
+        throw new Error(
+          'Não é possível excluir este produto pois existem pedidos relacionados. Considere desativar o produto em vez de excluí-lo.',
+        );
+      }
+
+      // Verificar se existem itens do carrinho relacionados
+      const relatedCartItems = await this.prisma.cartItem.findFirst({
+        where: { productId: id },
+      });
+
+      if (relatedCartItems) {
+        this.logger.warn(
+          `Tentativa de deletar produto ${id} com itens no carrinho - operação negada`,
+        );
+        throw new Error(
+          'Não é possível excluir este produto pois existem itens no carrinho relacionados. Considere desativar o produto em vez de excluí-lo.',
+        );
+      }
+
+      // Se não há registros relacionados, pode excluir
+      await this.prisma.product.delete({
+        where: { id },
+      });
+
+      this.logger.log(`Produto deletado com sucesso: ${product.name} (ID: ${id})`);
+
+      // Invalidar cache de produtos
+      await this.cacheService.invalidateByTags(['products', 'stats']);
+
+      return {
+        success: true,
+        message: 'Produto deletado com sucesso',
+      };
+    } catch (error) {
+      this.logger.error(`Erro ao deletar produto ${id} para clientId: ${clientId}`, error.stack);
+      throw error;
     }
-
-    // Verificar se existem pedidos relacionados
-    const relatedOrders = await this.prisma.orderItem.findFirst({
-      where: { productId: id },
-    });
-
-    if (relatedOrders) {
-      throw new Error(
-        'Não é possível excluir este produto pois existem pedidos relacionados. Considere desativar o produto em vez de excluí-lo.',
-      );
-    }
-
-    // Verificar se existem itens do carrinho relacionados
-    const relatedCartItems = await this.prisma.cartItem.findFirst({
-      where: { productId: id },
-    });
-
-    if (relatedCartItems) {
-      throw new Error(
-        'Não é possível excluir este produto pois existem itens no carrinho relacionados. Considere desativar o produto em vez de excluí-lo.',
-      );
-    }
-
-    // Se não há registros relacionados, pode excluir
-    await this.prisma.product.delete({
-      where: { id },
-    });
-
-    return {
-      success: true,
-      message: 'Produto deletado com sucesso',
-    };
   }
 
   /**
    * Atualizar estoque
    */
   async updateStock(id: string, stock: number, clientId: string) {
-    const product = await this.prisma.product.findFirst({
-      where: { id, clientId },
-    });
+    this.logger.log(`Atualizando estoque do produto: ${id} para ${stock} unidades`);
 
-    if (!product) {
-      throw new NotFoundException('Produto não encontrado');
+    try {
+      const product = await this.prisma.product.findFirst({
+        where: { id, clientId },
+      });
+
+      if (!product) {
+        this.logger.warn(`Produto não encontrado para atualização de estoque: ${id}`);
+        throw new NotFoundException('Produto não encontrado');
+      }
+
+      this.logger.debug(
+        `Estoque atual: ${product.stock} → Novo estoque: ${stock} (${product.name})`,
+      );
+
+      const cleanedData = cleanData({ stock: Number(stock) });
+
+      const updatedProduct = await this.prisma.product.update({
+        where: { id },
+        data: cleanedData,
+      });
+
+      this.logger.log(`Estoque atualizado com sucesso para produto: ${updatedProduct.name}`);
+
+      // Invalidar cache de produtos e estatísticas
+      await this.cacheService.invalidateByTags(['products', 'stats', 'low-stock']);
+
+      return {
+        success: true,
+        data: {
+          ...updatedProduct,
+          price: Number(updatedProduct.price),
+        },
+        message: 'Estoque atualizado com sucesso',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Erro ao atualizar estoque do produto ${id} para clientId: ${clientId}`,
+        error.stack,
+      );
+      throw error;
     }
-
-    const cleanedData = cleanData({ stock: Number(stock) });
-
-    const updatedProduct = await this.prisma.product.update({
-      where: { id },
-      data: cleanedData,
-    });
-
-    return {
-      success: true,
-      data: {
-        ...updatedProduct,
-        price: Number(updatedProduct.price),
-      },
-      message: 'Estoque atualizado com sucesso',
-    };
   }
 
   /**
    * Desativar produto (alternativa segura à exclusão)
    */
   async deactivate(id: string, clientId: string) {
-    const product = await this.prisma.product.findFirst({
-      where: { id, clientId },
-    });
+    this.logger.log(`Desativando produto: ${id} para clientId: ${clientId}`);
 
-    if (!product) {
-      throw new NotFoundException('Produto não encontrado');
+    try {
+      const product = await this.prisma.product.findFirst({
+        where: { id, clientId },
+      });
+
+      if (!product) {
+        this.logger.warn(`Produto não encontrado para desativação: ${id}`);
+        throw new NotFoundException('Produto não encontrado');
+      }
+
+      this.logger.debug(`Desativando produto: ${product.name}`);
+
+      // Desativar o produto em vez de excluí-lo
+      await this.prisma.product.update({
+        where: { id },
+        data: { isActive: false },
+      });
+
+      this.logger.log(`Produto desativado com sucesso: ${product.name} (ID: ${id})`);
+
+      // Invalidar cache de produtos
+      await this.cacheService.invalidateByTags(['products', 'stats']);
+
+      return {
+        success: true,
+        message: 'Produto desativado com sucesso',
+      };
+    } catch (error) {
+      this.logger.error(`Erro ao desativar produto ${id} para clientId: ${clientId}`, error.stack);
+      throw error;
     }
-
-    // Desativar o produto em vez de excluí-lo
-    await this.prisma.product.update({
-      where: { id },
-      data: { isActive: false },
-    });
-
-    return {
-      success: true,
-      message: 'Produto desativado com sucesso',
-    };
   }
 
   // Métodos auxiliares privados

@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, VersioningType, Logger } from '@nestjs/common';
+import { ValidationPipe, VersioningType, Logger, RequestMethod } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
@@ -8,8 +8,6 @@ import * as compression from 'compression';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
-import { MetricsInterceptor } from './common/metrics/metrics.interceptor';
-import { MetricsService } from './common/metrics/metrics.service';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -73,15 +71,20 @@ async function bootstrap() {
     ],
   });
 
-  // Versionamento da API
+  // Prefixo global (excluindo rotas de métricas)
+  app.setGlobalPrefix('api', {
+    exclude: [
+      { path: 'metrics', method: RequestMethod.GET },
+      { path: 'metrics/json', method: RequestMethod.GET },
+    ],
+  });
+
+  // Versionamento da API (após o prefixo global)
   app.enableVersioning({
     type: VersioningType.URI,
     defaultVersion: configService.get('API_VERSION') || 'v1',
   });
-
-  // Prefixo global
-  app.setGlobalPrefix('api');
-  logger.log('🌐 Global prefix configurado: /api');
+  logger.log('🌐 Global prefix configurado: /api (excluindo métricas e health)');
 
   // Pipes globais de validação
   app.useGlobalPipes(
@@ -96,11 +99,14 @@ async function bootstrap() {
   );
 
   // Filtros globais de exceção
+  // Esta linha registra um filtro global de exceções personalizado (HttpExceptionFilter) na aplicação NestJS.
+  // Isso significa que qualquer erro ou exceção lançada durante o processamento das requisições HTTP será interceptada por esse filtro,
+  // permitindo tratar, formatar e responder os erros de forma padronizada para toda a API.
   app.useGlobalFilters(new HttpExceptionFilter());
 
   // Interceptors globais
   app.useGlobalInterceptors(new TransformInterceptor());
-  app.useGlobalInterceptors(new MetricsInterceptor(app.get(MetricsService)));
+  // MetricsInterceptor é registrado via APP_INTERCEPTOR no AppModule
 
   // Configuração do Swagger
   if (configService.get('NODE_ENV') !== 'production') {
@@ -145,21 +151,8 @@ async function bootstrap() {
   logger.log(`📊 Métricas disponíveis em: http://localhost:${port}/metrics`);
   logger.log(`🌍 Ambiente: ${configService.get('NODE_ENV')}`);
 
-  // Adicionar endpoint /metrics na raiz para Prometheus (fora do prefixo global)
-  // Aguardar a inicialização completa antes de acessar o serviço
-  const metricsService = app.get(MetricsService);
-  const expressInstance = app.getHttpAdapter().getInstance();
-
-  expressInstance.get('/metrics', async (req, res) => {
-    try {
-      const metrics = await metricsService.getMetrics();
-      res.set('Content-Type', 'text/plain');
-      res.send(metrics);
-    } catch (error) {
-      console.error('Erro ao obter métricas:', error);
-      res.status(500).send('Erro interno do servidor');
-    }
-  });
+  // Endpoint /metrics será fornecido pelo MetricsController
+  // que está configurado para ignorar o prefixo global
 
   await app.listen(port);
 }

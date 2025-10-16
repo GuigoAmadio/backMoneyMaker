@@ -1,11 +1,14 @@
 import { Injectable, NestInterceptor, ExecutionContext, CallHandler, Logger } from '@nestjs/common';
-import { Observable } from 'rxjs';
+import { Observable, throwError } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
 import { Request, Response } from 'express';
+import { EventService } from '../events/event.service';
 
 @Injectable()
 export class LoggerInterceptor implements NestInterceptor {
   private readonly logger = new Logger(LoggerInterceptor.name);
+
+  constructor(private readonly eventService: EventService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest<Request>();
@@ -33,34 +36,64 @@ export class LoggerInterceptor implements NestInterceptor {
       tap((data) => {
         const duration = Date.now() - startTime;
         const statusCode = response.statusCode;
-        this.logger.log(
-          `=== LoggerInterceptor: Outgoing ${method} ${url} ${statusCode} - ${duration}ms ===`,
-          {
-            method,
-            url,
-            statusCode,
-            duration,
-            userId: (user as any)?.id || null,
-            responseSize: JSON.stringify(data).length,
-          },
-        );
+        const logMessage = `${method} ${url} ${statusCode} - ${duration}ms`;
+
+        this.logger.log(`=== LoggerInterceptor: Outgoing ${logMessage} ===`, {
+          method,
+          url,
+          statusCode,
+          duration,
+          userId: (user as any)?.id || null,
+          responseSize: JSON.stringify(data).length,
+        });
+
+        // Emitir evento via EventService (event-driven)
+        this.eventService.emitHttpRequest({
+          method,
+          url,
+          statusCode,
+          duration,
+          userId: (user as any)?.id || null,
+          clientId: (request as any).clientId || null,
+          responseSize: JSON.stringify(data).length,
+        });
       }),
       catchError((error) => {
         const duration = Date.now() - startTime;
         const statusCode = error.status || 500;
-        this.logger.error(
-          `=== LoggerInterceptor: Error ${method} ${url} ${statusCode} - ${duration}ms ===`,
-          {
-            method,
-            url,
-            statusCode,
-            duration,
-            userId: (user as any)?.id || null,
-            error: error.message,
-            stack: error.stack,
-          },
-        );
-        throw error;
+        const logMessage = `${method} ${url} ${statusCode} - ${duration}ms - ${error.message}`;
+
+        this.logger.error(`=== LoggerInterceptor: Error ${logMessage} ===`, {
+          method,
+          url,
+          statusCode,
+          duration,
+          userId: (user as any)?.id || null,
+          error: error.message,
+          stack: error.stack,
+        });
+
+        // Emitir evento de erro via EventService
+        this.eventService.emitHttpRequest({
+          method,
+          url,
+          statusCode,
+          duration,
+          userId: (user as any)?.id || null,
+          clientId: (request as any).clientId || null,
+        });
+
+        // Emitir log de erro
+        this.eventService.emitLog({
+          level: 'error',
+          message: logMessage,
+          module: 'HTTP',
+          userId: (user as any)?.id || null,
+          clientId: (request as any).clientId || null,
+          metadata: { error: error.message, stack: error.stack },
+        });
+
+        return throwError(() => error);
       }),
     );
   }

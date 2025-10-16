@@ -38,6 +38,8 @@ export class ClientsController implements OnModuleInit {
     );
   }
 
+  // ==================== ROTAS ESPECÍFICAS (ANTES das rotas com parâmetros) ====================
+
   @Get('count')
   @ApiOperation({ summary: 'Obter quantidade total de clientes' })
   @ApiResponse({ status: 200, description: 'Quantidade de clientes retornada com sucesso' })
@@ -54,6 +56,132 @@ export class ClientsController implements OnModuleInit {
       throw error;
     }
   }
+
+  @Get('dashboard')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.CLIENT)
+  @ApiOperation({ summary: 'Obter dados dos clientes para dashboard' })
+  @ApiResponse({ status: 200, description: 'Dados dos clientes obtidos com sucesso' })
+  async getClientsForDashboard() {
+    this.logger.log('📊 ROTA GET /clients/dashboard CHAMADA!');
+
+    try {
+      const result = await this.clientsService.getClientsForDashboard();
+      this.logger.log('✅ Dados dos clientes para dashboard obtidos com sucesso');
+      return result;
+    } catch (error) {
+      this.logger.error('❌ Erro ao obter dados dos clientes para dashboard:', error);
+      throw error;
+    }
+  }
+
+  @Get('dashboard/:clientId')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.CLIENT)
+  @ApiOperation({ summary: 'Obter dados específicos de um cliente para dashboard' })
+  @ApiResponse({ status: 200, description: 'Dados do cliente obtidos com sucesso' })
+  async getClientForDashboard(@Param('clientId') clientId: string) {
+    this.logger.log(`📊 ROTA GET /clients/dashboard/${clientId} CHAMADA!`);
+
+    try {
+      const result = await this.clientsService.getClientForDashboard(clientId);
+      this.logger.log('✅ Dados do cliente para dashboard obtidos com sucesso');
+      return result;
+    } catch (error) {
+      this.logger.error('❌ Erro ao obter dados do cliente para dashboard:', error);
+      throw error;
+    }
+  }
+
+
+  @Get('services/:clientId')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.CLIENT)
+  @ApiOperation({ summary: 'Obter dados específicos de um cliente para dashboard' })
+  @ApiResponse({ status: 200, description: 'Dados do cliente obtidos com sucesso' })
+  async getServicesForClient(@Param('clientId') clientId: string) {
+    this.logger.log(`📊 ROTA GET /clients/dashboard/${clientId} CHAMADA!`);
+
+    try {
+      const result = await this.clientsService.getClientForDashboard(clientId);
+      this.logger.log('✅ Dados do cliente para dashboard obtidos com sucesso');
+      return result;
+    } catch (error) {
+      this.logger.error('❌ Erro ao obter dados do cliente para dashboard:', error);
+      throw error;
+    }
+  }
+
+  @Get('by-employee/:userId')
+  @ApiOperation({ summary: 'Buscar clientes por funcionário (usando user_id)' })
+  @ApiResponse({ status: 200, description: 'Clientes encontrados com sucesso' })
+  async findClientsByEmployee(@Param('userId') employeeId: string, @Tenant() clientId: string) {
+    this.logger.log(`👥 ROTA GET /clients/by-employee/${employeeId} CHAMADA!`);
+    this.logger.log(`🏢 ClientId: ${clientId}`);
+    this.logger.log(`👤 employeeId: ${employeeId}`);
+
+    try {
+      const result = await this.clientsService.findClientsByEmployee(employeeId);
+      this.logger.log('✅ Busca de clientes por funcionário realizada com sucesso');
+      return result;
+    } catch (error) {
+      this.logger.error('❌ Erro na busca de clientes por funcionário:', error);
+      throw error;
+    }
+  }
+
+  @Post('dashboard')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.CLIENT)
+  @ApiOperation({ summary: 'Criar novo cliente via dashboard' })
+  @ApiResponse({ status: 201, description: 'Cliente criado com sucesso' })
+  async createClientFromDashboard(@Body() createClientDto: CreateClientDto) {
+    this.logger.log('📊 ROTA POST /clients/dashboard CHAMADA!');
+
+    try {
+      const result = await this.clientsService.createClientFromDashboard(createClientDto);
+      this.logger.log('✅ Cliente criado via dashboard com sucesso');
+      return result;
+    } catch (error) {
+      this.logger.error('❌ Erro ao criar cliente via dashboard:', error);
+      throw error;
+    }
+  }
+
+  @Patch('dashboard/:clientId')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.CLIENT)
+  @ApiOperation({ summary: 'Atualizar cliente via dashboard' })
+  @ApiResponse({ status: 200, description: 'Cliente atualizado com sucesso' })
+  async updateClientFromDashboard(
+    @Param('clientId') clientId: string,
+    @Body() updateClientDto: UpdateClientDto,
+  ) {
+    this.logger.log(`📊 ROTA PATCH /clients/dashboard/${clientId} CHAMADA!`);
+
+    try {
+      const result = await this.clientsService.updateClientFromDashboard(clientId, updateClientDto);
+      this.logger.log('✅ Cliente atualizado via dashboard com sucesso');
+      return result;
+    } catch (error) {
+      this.logger.error('❌ Erro ao atualizar cliente via dashboard:', error);
+      throw error;
+    }
+  }
+
+  @Delete('dashboard/:clientId')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.CLIENT)
+  @ApiOperation({ summary: 'Excluir cliente via dashboard' })
+  @ApiResponse({ status: 200, description: 'Cliente excluído com sucesso' })
+  async deleteClientFromDashboard(@Param('clientId') clientId: string) {
+    this.logger.log(`📊 ROTA DELETE /clients/dashboard/${clientId} CHAMADA!`);
+
+    try {
+      const result = await this.clientsService.deleteClientFromDashboard(clientId);
+      this.logger.log('✅ Cliente excluído via dashboard com sucesso');
+      return result;
+    } catch (error) {
+      this.logger.error('❌ Erro ao excluir cliente via dashboard:', error);
+      throw error;
+    }
+  }
+
+  // ==================== ROTAS GENÉRICAS (DEPOIS das rotas específicas) ====================
 
   @Get()
   @ApiOperation({ summary: 'Listar todos os clientes' })
@@ -118,23 +246,5 @@ export class ClientsController implements OnModuleInit {
   async remove(@Param('id') id: string, @Tenant() clientId: string) {
     this.logger.log(`🗑️ ROTA DELETE /clients/${id} CHAMADA!`);
     return this.clientsService.remove(id, clientId);
-  }
-
-  @Get('by-employee/:userId')
-  @ApiOperation({ summary: 'Buscar clientes por funcionário (usando user_id)' })
-  @ApiResponse({ status: 200, description: 'Clientes encontrados com sucesso' })
-  async findClientsByEmployee(@Param('userId') employeeId: string, @Tenant() clientId: string) {
-    this.logger.log(`👥 ROTA GET /clients/by-employee/${employeeId} CHAMADA!`);
-    this.logger.log(`🏢 ClientId: ${clientId}`);
-    this.logger.log(`👤 employeeId: ${employeeId}`);
-
-    try {
-      const result = await this.clientsService.findClientsByEmployee(employeeId);
-      this.logger.log('✅ Busca de clientes por funcionário realizada com sucesso');
-      return result;
-    } catch (error) {
-      this.logger.error('❌ Erro na busca de clientes por funcionário:', error);
-      throw error;
-    }
   }
 }

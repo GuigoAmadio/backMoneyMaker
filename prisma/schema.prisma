@@ -17,8 +17,10 @@ model Client {
   website            String?
   status             ClientStatus        @default(ACTIVE)
   settings           Json                @default("{}")
+  activeServices     Json                @default("[]")
   plan               String              @default("basic")
   expiresAt          DateTime?
+  stripeCustomerId   String?             @unique @map("stripe_customer_id")
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   appointments       Appointment[]
@@ -43,6 +45,18 @@ model Client {
   annotations        Annotation[]
   cacheMetadata      CacheMetadata[]
   schedules          Schedule[]
+  
+  // ===== NOVOS RELACIONAMENTOS WORKSPACE =====
+  workspaces              Workspace[]
+  transactions            Transaction[]
+  financialGoals          FinancialGoal[]
+  budgets                 Budget[]
+  sharedDataAudit         SharedDataAudit[]
+  workspaceNotifications  WorkspaceNotification[]
+  
+  // ===== RELACIONAMENTOS ANALYTICS =====
+  analyticsEvents         AnalyticsEvent[]
+  analyticsReports        AnalyticsReport[]
 
   @@map("clients")
 }
@@ -77,6 +91,19 @@ model User {
   employee                    Employee?       @relation("UserEmployee", fields: [employeeId], references: [id], onDelete: SetNull)
   annotations                 Annotation[]
   schedules                   Schedule[]
+  
+  // ===== NOVOS RELACIONAMENTOS WORKSPACE =====
+  createdWorkspaces           Workspace[]                    @relation("WorkspaceCreator")
+  workspaceMembers            WorkspaceMember[]              @relation("WorkspaceMember")
+  grantedPermissions          WorkspacePermission[]          @relation("PermissionGranter")
+  transactions                Transaction[]                  @relation("TransactionUser")
+  financialGoals              FinancialGoal[]               @relation("GoalUser")
+  budgets                     Budget[]                       @relation("BudgetUser")
+  auditLogs                   SharedDataAudit[]             @relation("AuditUser")
+  notifications               WorkspaceNotification[]        @relation("NotificationUser")
+  
+  // ===== RELACIONAMENTOS ANALYTICS =====
+  analyticsEvents             AnalyticsEvent[]
 
   @@unique([clientId, email])
   @@unique([clientId, employeeId])
@@ -217,6 +244,10 @@ model Category {
   client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   products    Product[]
   services    Service[]
+  
+  // ===== NOVOS RELACIONAMENTOS WORKSPACE =====
+  transactions     Transaction[]     @relation("TransactionCategory")
+  budgetCategories BudgetCategory[]  @relation("BudgetCategory")
 
   @@map("categories")
 }
@@ -1060,4 +1091,363 @@ model CacheMetadata {
   @@index([clientId, cacheKey])
   @@index([clientId, lastUpdated])
   @@map("frontend_cache_metadata")
+}
+
+// ===== SISTEMA DE WORKSPACE =====
+model Workspace {
+  id          String   @id @default(uuid())
+  clientId    String   @map("client_id")
+  name        String
+  description String?
+  isPublic    Boolean  @default(false) @map("is_public")
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relacionamentos
+  client   Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  creator  User              @relation("WorkspaceCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  members  WorkspaceMember[]
+  permissions WorkspacePermission[]
+  transactions Transaction[]
+  goals    FinancialGoal[]
+  budgets  Budget[]
+  auditLogs SharedDataAudit[]
+  notifications WorkspaceNotification[]
+
+  // Índices para performance
+  @@index([clientId, isPublic])
+  @@index([clientId, createdBy])
+  @@index([name])
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String   @id @default(uuid())
+  workspaceId String   @map("workspace_id")
+  userId      String   @map("user_id")
+  role        WorkspaceRole @default(MEMBER)
+  joinedAt    DateTime @default(now()) @map("joined_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relacionamentos
+  workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User                 @relation("WorkspaceMember", fields: [userId], references: [id], onDelete: Cascade)
+  permissions WorkspacePermission[]
+
+  // Índices únicos
+  @@unique([workspaceId, userId])
+  @@index([workspaceId, role])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+model WorkspacePermission {
+  id             String   @id @default(uuid())
+  workspaceId    String   @map("workspace_id")
+  memberId       String   @map("member_id")
+  permission     WorkspacePermissionType
+  grantedAt      DateTime @default(now()) @map("granted_at")
+  grantedBy      String   @map("granted_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relacionamentos
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  member    WorkspaceMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  granter   User            @relation("PermissionGranter", fields: [grantedBy], references: [id], onDelete: Cascade)
+
+  // Índices
+  @@unique([workspaceId, memberId, permission])
+  @@index([workspaceId, permission])
+  @@index([memberId])
+  @@map("workspace_permissions")
+}
+
+// ===== MÓDULO FINANCEIRO =====
+model Transaction {
+  id               String            @id @default(uuid())
+  clientId         String            @map("client_id")
+  workspaceId      String?           @map("workspace_id")
+  userId           String            @map("user_id")
+  categoryId       String?           @map("category_id")
+  title            String
+  description      String?
+  amount           Decimal           @db.Decimal(12, 2)
+  type             TransactionType
+  status           TransactionStatus @default(CONFIRMED)
+  date             DateTime
+  isRecurring      Boolean           @default(false) @map("is_recurring")
+  recurringPattern Json?             @map("recurring_pattern")
+  tags             String[]          @default([])
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  // Relacionamentos
+  client   Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  user     User     @relation("TransactionUser", fields: [userId], references: [id], onDelete: Cascade)
+  category Category? @relation("TransactionCategory", fields: [categoryId], references: [id], onDelete: SetNull)
+
+  // Índices para performance
+  @@index([clientId, workspaceId])
+  @@index([clientId, userId])
+  @@index([clientId, type])
+  @@index([clientId, status])
+  @@index([clientId, date])
+  @@index([workspaceId, date])
+  @@index([categoryId])
+  @@map("transactions")
+}
+
+model FinancialGoal {
+  id          String           @id @default(uuid())
+  clientId    String           @map("client_id")
+  workspaceId String?          @map("workspace_id")
+  userId      String           @map("user_id")
+  title       String
+  description String?
+  targetAmount Decimal         @map("target_amount") @db.Decimal(12, 2)
+  currentAmount  Decimal         @default(0) @map("current_amount") @db.Decimal(12, 2)
+  category     String?
+  targetDate   DateTime?       @map("target_date")
+  status       GoalStatus      @default(ACTIVE)
+  priority     GoalPriority    @default(MEDIUM)
+  isPublic     Boolean         @default(false) @map("is_public")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  // Relacionamentos
+  client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  user      User       @relation("GoalUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Índices
+  @@index([clientId, workspaceId])
+  @@index([clientId, userId])
+  @@index([clientId, status])
+  @@index([workspaceId, status])
+  @@map("financial_goals")
+}
+
+model Budget {
+  id          String        @id @default(uuid())
+  clientId    String        @map("client_id")
+  workspaceId String?       @map("workspace_id")
+  userId      String        @map("user_id")
+  name        String
+  description String?
+  period      BudgetPeriod
+  startDate   DateTime      @map("start_date")
+  endDate     DateTime      @map("end_date")
+  totalAmount Decimal       @map("total_amount") @db.Decimal(12, 2)
+  spentAmount Decimal       @default(0) @map("spent_amount") @db.Decimal(12, 2)
+  status      BudgetStatus  @default(ACTIVE)
+  isPublic    Boolean       @default(false) @map("is_public")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  // Relacionamentos
+  client      Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  workspace   Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  user        User              @relation("BudgetUser", fields: [userId], references: [id], onDelete: Cascade)
+  categories  BudgetCategory[]
+
+  // Índices
+  @@index([clientId, workspaceId])
+  @@index([clientId, userId])
+  @@index([clientId, period])
+  @@index([workspaceId, period])
+  @@map("budgets")
+}
+
+model BudgetCategory {
+  id          String   @id @default(uuid())
+  budgetId    String   @map("budget_id")
+  categoryId  String   @map("category_id")
+  amount      Decimal  @db.Decimal(12, 2)
+  spentAmount Decimal  @default(0) @map("spent_amount") @db.Decimal(12, 2)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relacionamentos
+  budget   Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  category Category @relation("BudgetCategory", fields: [categoryId], references: [id], onDelete: Cascade)
+
+  // Índices
+  @@unique([budgetId, categoryId])
+  @@index([budgetId])
+  @@index([categoryId])
+  @@map("budget_categories")
+}
+
+model SharedDataAudit {
+  id          String   @id @default(uuid())
+  clientId    String   @map("client_id")
+  workspaceId String?  @map("workspace_id")
+  userId      String   @map("user_id")
+  action      String
+  entity      String
+  entityId    String   @map("entity_id")
+  oldValues   Json?    @map("old_values")
+  newValues   Json?    @map("new_values")
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relacionamentos
+  client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  user      User       @relation("AuditUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Índices
+  @@index([clientId, workspaceId])
+  @@index([clientId, userId])
+  @@index([clientId, action])
+  @@index([workspaceId, action])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("shared_data_audit")
+}
+
+model WorkspaceNotification {
+  id          String             @id @default(uuid())
+  clientId    String             @map("client_id")
+  workspaceId String?            @map("workspace_id")
+  userId      String             @map("user_id")
+  type        NotificationType
+  title       String
+  message     String
+  data        Json?              @default("{}")
+  isRead      Boolean            @default(false) @map("is_read")
+  readAt      DateTime?          @map("read_at")
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  // Relacionamentos
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  user      User     @relation("NotificationUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Índices
+  @@index([clientId, userId, isRead])
+  @@index([workspaceId, userId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("workspace_notifications")
+}
+
+// ===== NOVOS ENUMS =====
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum WorkspacePermissionType {
+  CREATE_TRANSACTION
+  EDIT_TRANSACTION
+  DELETE_TRANSACTION
+  VIEW_REPORTS
+  MANAGE_MEMBERS
+  MANAGE_WORKSPACE
+  ALL
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum TransactionStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  PAUSED
+  CANCELLED
+}
+
+enum GoalPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum BudgetPeriod {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  CUSTOM
+}
+
+enum BudgetStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum NotificationType {
+  TRANSACTION_CREATED
+  TRANSACTION_UPDATED
+  TRANSACTION_DELETED
+  GOAL_CREATED
+  GOAL_UPDATED
+  GOAL_COMPLETED
+  BUDGET_CREATED
+  BUDGET_UPDATED
+  BUDGET_EXCEEDED
+  MEMBER_ADDED
+  MEMBER_REMOVED
+  PERMISSION_CHANGED
+  WORKSPACE_UPDATED
+  GENERAL
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(uuid())
+  clientId  String
+  eventType String   // 'page_view', 'click', 'conversion', 'api_call'
+  userId    String?
+  sessionId String?
+  eventData Json     @default("{}")
+  timestamp DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([clientId, eventType])
+  @@index([clientId, timestamp])
+  @@index([sessionId])
+  @@map("analytics_events")
+}
+
+model AnalyticsReport {
+  id          String   @id @default(uuid())
+  clientId    String
+  title       String
+  description String?
+  reportType  String   // 'monthly', 'quarterly', 'yearly', 'custom'
+  period      String   // '2024-01', 'Q1-2024', '2024', etc.
+  status      String   @default("pending") // 'pending', 'generating', 'completed', 'failed'
+  fileUrl     String?
+  metadata    Json     @default("{}")
+  generatedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relacionamentos
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, reportType])
+  @@index([clientId, status])
+  @@map("analytics_reports")
 }

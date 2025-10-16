@@ -1,4 +1,12 @@
-import { IsString, IsEmail, IsOptional, MinLength, MaxLength, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsEmail,
+  IsOptional,
+  MinLength,
+  MaxLength,
+  IsEnum,
+  IsArray,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 
@@ -44,4 +52,14 @@ export class RegisterDto {
   @IsOptional()
   @IsEnum(UserRole)
   role?: UserRole = UserRole.CLIENT;
+
+  @ApiPropertyOptional({
+    description: 'Serviços ativos para o cliente',
+    example: ['appointments', 'ecommerce', 'finance'],
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  activeServices?: string[];
 }

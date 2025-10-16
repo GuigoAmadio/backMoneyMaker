@@ -38,6 +38,50 @@ services:
       timeout: 10s
       retries: 5
 
+  # ChromaDB para Vector Store (IA)
+  chromadb:
+    image: chromadb/chroma:latest
+    restart: unless-stopped
+    ports:
+      - '${CHROMADB_PORT:-8000}:8000'
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: 0.5
+    volumes:
+      - chromadb_data:/chroma/chroma
+    networks:
+      - moneymaker-network
+    environment:
+      IS_PERSISTENT: 'TRUE'
+      ANONYMIZED_TELEMETRY: 'FALSE'
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8000/api/v1/heartbeat']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Ollama para LLM Local (IA) - OPCIONAL
+  # Descomente se quiser rodar localmente (requer recursos significativos)
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   restart: unless-stopped
+  #   ports:
+  #     - '${OLLAMA_PORT:-11434}:11434'
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   networks:
+  #     - moneymaker-network
+  #   # Descomente para usar GPU (NVIDIA)
+  #   # deploy:
+  #   #   resources:
+  #   #     reservations:
+  #   #       devices:
+  #   #         - driver: nvidia
+  #   #           count: 1
+  #   #           capabilities: [gpu]
+
   # Prometheus para métricas
   prometheus:
     image: prom/prometheus:latest
@@ -74,9 +118,15 @@ services:
       TELEGRAM_RETRY_DELAY: ${TELEGRAM_RETRY_DELAY:-2000}
       # Variáveis para Prometheus (caso precise)
       PROMETHEUS_METRICS_PORT: 9091
-    volumes:
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
+      # Variáveis para IA
+      CHROMADB_URL: ${CHROMADB_URL:-http://chromadb:8000}
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}
+    # Volumes removidos para produção - o build multi-stage já inclui tudo necessário
+    # Para desenvolvimento, descomente as linhas abaixo:
+    # volumes:
+    #   - .:/usr/src/app
+    #   - /usr/src/app/node_modules
     networks:
       - moneymaker-network
     depends_on:
@@ -84,10 +134,54 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      chromadb:
+        condition: service_healthy
+      # Descomente se habilitar o Ollama
+      # ollama:
+      #   condition: service_started
+
+  # Serviço de Backup Automático
+  backup:
+    image: postgres:15-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${DATABASE_PASSWORD:-ljZccQ+Y5DRBr4ljJnXqBdNatdX3BvwPSqaZbZ0tAjs=}
+      POSTGRES_DB: ${DATABASE_NAME:-moneymaker_prod}
+      POSTGRES_USER: ${DATABASE_USER:-moneymaker_user}
+      POSTGRES_HOST: postgres
+      BACKUP_ENABLED: ${BACKUP_ENABLED:-true}
+      NODE_ENV: ${NODE_ENV:-production}
+    volumes:
+      - ./backups:/backups
+      - ./scripts:/scripts
+    command: >
+      sh -c "
+        if [ \"$$BACKUP_ENABLED\" = \"true\" ] && [ \"$$NODE_ENV\" = \"production\" ]; then
+          echo '🔄 Backup habilitado para produção';
+          echo '⏰ Aguardando 2 horas para primeiro backup...';
+          sleep 7200;  # 2 horas
+          /scripts/backup.sh;
+          while true; do
+            sleep 86400;
+            /scripts/backup.sh;
+          done;
+        else
+          echo '🚫 Backup desabilitado ou não é produção';
+          sleep infinity;
+        fi;
+      "
+    restart: unless-stopped
+    networks:
+      - moneymaker-network
 
 volumes:
   postgres_data:
   redis_data:
+  chromadb_data:
+  # Descomente se habilitar o Ollama
+  # ollama_data:
 
 networks:
   moneymaker-network:

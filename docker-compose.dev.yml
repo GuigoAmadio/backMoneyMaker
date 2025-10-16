@@ -1,0 +1,21 @@
+# docker-compose.dev.yml - Configuração para DESENVOLVIMENTO
+#
+# USO:
+#   docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# OU criar alias:
+#   docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev # Dockerfile específico para dev
+    environment:
+      NODE_ENV: development # Modo development
+    volumes:
+      - .:/usr/src/app # Mapear código local
+      - /usr/src/app/node_modules # Preservar node_modules do container
+
+    command: npm run start:dev # Hot reload
+

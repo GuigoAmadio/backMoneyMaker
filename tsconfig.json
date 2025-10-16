@@ -9,6 +9,7 @@
     "target": "ES2021",
     "sourceMap": true,
     "outDir": "./dist",
+    "rootDir": "./src",
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
@@ -25,6 +26,6 @@
       "@/database/*": ["src/database/*"]
     }
   },
-  "include": ["src/**/*", "prisma/**/*"],
-  "exclude": ["node_modules", "dist", "test", "src/test"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "test", "src/test", "prisma"]
 }

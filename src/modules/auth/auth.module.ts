@@ -5,11 +5,12 @@ import { ConfigService } from '@nestjs/config';
 
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
-import { JwtStrategy } from './strategies/jwt.strategy';
-import { LocalStrategy } from './strategies/local.strategy';
+import { JwtStrategy } from '../../common/strategies/jwt.strategy';
+import { LocalStrategy } from '../../common/strategies/local.strategy';
 import { UsersModule } from '../users/users.module';
 import { TenantModule } from '../../common/tenant/tenant.module';
 import { TelegramService } from '../../common/notifications/telegram.service';
+import { EmailModule } from '../../common/email/email.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { TelegramService } from '../../common/notifications/telegram.service';
     }),
     UsersModule,
     TenantModule,
+    EmailModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, LocalStrategy, TelegramService],

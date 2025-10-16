@@ -1,0 +1,27 @@
+# Dockerfile.dev - Para DESENVOLVIMENTO com hot reload
+FROM node:20-alpine
+
+# Instalar dependências do sistema
+RUN apk add --no-cache libc6-compat python3 make g++ openssl openssl-dev ca-certificates
+
+WORKDIR /usr/src/app
+
+# Copiar arquivos de dependências
+COPY package*.json ./
+COPY prisma ./prisma/
+
+# Instalar TODAS as dependências (incluindo dev)
+RUN npm install
+
+# Gerar cliente Prisma
+RUN npx prisma generate
+
+# Copiar código fonte (será sobrescrito pelos volumes, mas necessário para build inicial)
+COPY . .
+
+# Expor porta
+EXPOSE 3000
+
+# Comando padrão (pode ser sobrescrito no docker-compose)
+CMD ["npm", "run", "start:dev"]
+

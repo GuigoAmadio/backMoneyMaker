@@ -79,7 +79,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   /**
    * Executa transação com retry automático
    */
-  async transaction<T>(fn: (prisma: PrismaClient) => Promise<T>, maxRetries = 3): Promise<T> {
+  async executeTransaction<T>(
+    fn: (prisma: PrismaClient) => Promise<T>,
+    maxRetries = 3,
+  ): Promise<T> {
     let attempt = 0;
 
     while (attempt < maxRetries) {

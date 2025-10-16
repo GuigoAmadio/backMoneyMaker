@@ -16,6 +16,10 @@ import { LoginDto } from './dto/login.dto';
 import { TenantService } from '../../common/tenant/tenant.service';
 import { TelegramService } from '../../common/notifications/telegram.service';
 import { UpdateCredentialsDto } from './dto/update-credentials.dto';
+import { EmailService } from '../../common/email/email.service';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
 
 @Injectable()
 export class AuthService {
@@ -27,6 +31,7 @@ export class AuthService {
     private configService: ConfigService,
     private tenantService: TenantService,
     private telegramService: TelegramService,
+    private emailService: EmailService,
   ) {}
 
   /**
@@ -41,23 +46,15 @@ export class AuthService {
           ...(clientId && { clientId }),
           status: 'ACTIVE',
         },
-        select: {
-          id: true,
-          clientId: true,
-          name: true,
-          email: true,
-          phone: true,
-          role: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-          lastLogin: true,
-          emailVerified: true,
-          emailVerifiedAt: true,
-          employeeId: true, // <-- garante no JSON
-          lockedUntil: true,
-          password: true,
-          failedLoginAttempts: true,
+        include: {
+          client: {
+            select: {
+              id: true,
+              name: true,
+              status: true,
+              activeServices: true,
+            },
+          },
         },
       });
 
@@ -71,7 +68,7 @@ export class AuthService {
           },
           include: {
             client: {
-              select: { id: true, name: true, status: true },
+              select: { id: true, name: true, status: true, activeServices: true },
             },
             employees: {
               select: { id: true, isActive: true },
@@ -151,26 +148,161 @@ export class AuthService {
 
   /**
    * Registrar novo usuário
-   */
-  async register(registerDto: RegisterDto, clientId: string) {
+   /**
+    * Registrar novo usuário
+    * 
+    * Se clientId não for enviado (undefined ou null): 
+    * - O backend irá gerar automaticamente um novo clientId (UUID v4) ao criar um novo cliente.
+    * - NÃO é necessário gerar clientId no frontend ou enviar quando for um novo cliente.
+    */
+  async register(registerDto: RegisterDto, clientId?: string) {
     try {
-      // Verificar se o cliente existe
-      const clientExists = await this.tenantService.validateClient(clientId);
-      if (!clientExists) {
-        await this.telegramService.sendCustomAlert(
-          'error',
-          '🚨 CLIENTE INVÁLIDO',
-          `Tentativa de registro com clientId inválido: ${clientId}`,
-          { clientId, email: registerDto.email, timestamp: new Date() },
+      let client = null;
+      let isNewClient = false;
+      let usedClientId = clientId;
+
+      // ========================================
+      // CENÁRIO 1: SEM clientId → CRIAR NOVO CLIENTE
+      // ========================================
+      if (!usedClientId) {
+        this.logger.log('📝 Registro sem clientId → criando novo cliente');
+
+        // Gerar UUID único
+        let maxAttempts = 5; // Aumentado de 3 para 5
+        let attempt = 0;
+        let foundUnique = false;
+
+        while (attempt < maxAttempts && !foundUnique) {
+          const generatedId = crypto.randomUUID();
+          const exists = await this.prisma.client.findUnique({
+            where: { id: generatedId },
+          });
+
+          if (!exists) {
+            usedClientId = generatedId;
+            foundUnique = true;
+            break;
+          }
+
+          attempt++;
+          this.logger.warn(`⚠️ UUID collision detectado (tentativa ${attempt}/${maxAttempts})`);
+        }
+
+        if (!foundUnique) {
+          // Notificar erro crítico (colisão de UUID é extremamente raro)
+          await this.telegramService.sendCustomAlert(
+            'error',
+            '🚨 ERRO CRÍTICO: COLISÃO DE UUID',
+            'Não foi possível gerar UUID único após 5 tentativas',
+            { email: registerDto.email, timestamp: new Date() },
+          );
+          throw new ConflictException(
+            'Erro ao gerar identificador único. Por favor, tente novamente.',
+          );
+        }
+
+        isNewClient = true;
+
+        // Gerar slug a partir do nome
+        const slugBase = registerDto.name
+          .toLowerCase()
+          .replace(/\s+/g, '-')
+          .replace(/[^a-z0-9-]/g, '');
+
+        // Garantir que o slug seja único
+        let slug = slugBase;
+        let slugCounter = 1;
+        while (await this.prisma.client.findUnique({ where: { slug } })) {
+          slug = `${slugBase}-${slugCounter}`;
+          slugCounter++;
+        }
+
+        // Criar o novo cliente
+        client = await this.prisma.client.create({
+          data: {
+            id: usedClientId,
+            name: registerDto.name,
+            slug: slug,
+            email: registerDto.email,
+            phone: registerDto.phone,
+            activeServices: registerDto.activeServices || [],
+            status: 'ACTIVE',
+            plan: 'basic',
+          },
+        });
+
+        this.logger.log(`✅ Novo cliente criado: ${client.name} (${usedClientId})`);
+      } else {
+        // ========================================
+        // CENÁRIO 2: COM clientId → VALIDAR EXISTÊNCIA
+        // ========================================
+        this.logger.log(`🔗 Registro com clientId fornecido: ${usedClientId}`);
+
+        // Validar formato do clientId (UUID v4)
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(usedClientId)) {
+          this.logger.warn(
+            `❌ Tentativa de registro com clientId formato inválido: ${usedClientId}`,
+          );
+          throw new BadRequestException('O link de convite é inválido. Formato incorreto.');
+        }
+
+        // Buscar cliente no banco com informações detalhadas
+        const clientExists = await this.prisma.client.findUnique({
+          where: { id: usedClientId },
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            activeServices: true,
+            _count: {
+              select: { users: true },
+            },
+          },
+        });
+
+        if (!clientExists) {
+          this.logger.warn(`❌ Tentativa de registro com clientId inexistente: ${usedClientId}`);
+
+          // Notificar tentativa suspeita
+          await this.telegramService.sendCustomAlert(
+            'warning',
+            '⚠️ TENTATIVA DE REGISTRO COM CLIENT ID INEXISTENTE',
+            `Alguém tentou registrar com clientId inválido: ${usedClientId}`,
+            {
+              email: registerDto.email,
+              clientId: usedClientId,
+              timestamp: new Date(),
+            },
+          );
+
+          throw new BadRequestException(
+            'O link de convite é inválido ou expirou. Entre em contato com o administrador.',
+          );
+        }
+
+        if (clientExists.status !== 'ACTIVE') {
+          this.logger.warn(
+            `❌ Tentativa de registro para cliente inativo: ${usedClientId} (${clientExists.name})`,
+          );
+          throw new BadRequestException(
+            'Este cliente está inativo. Entre em contato com o suporte.',
+          );
+        }
+
+        this.logger.log(
+          `✅ Cliente validado: ${clientExists.name} (${clientExists._count.users} usuários existentes)`,
         );
-        throw new BadRequestException('Cliente inválido');
+
+        client = clientExists;
+        isNewClient = false;
       }
 
       // Verificar se email já existe para este cliente
       const existingUser = await this.prisma.user.findFirst({
         where: {
           email: registerDto.email,
-          clientId,
+          clientId: usedClientId,
         },
       });
 
@@ -179,28 +311,50 @@ export class AuthService {
           'warning',
           '⚠️ EMAIL JÁ CADASTRADO',
           `Tentativa de registro com email existente: ${registerDto.email}`,
-          { email: registerDto.email, clientId, timestamp: new Date() },
+          { email: registerDto.email, clientId: usedClientId, timestamp: new Date() },
         );
-        throw new ConflictException('Email já cadastrado');
+        throw new ConflictException('Email já cadastrado para este cliente');
       }
 
       // Hash da senha
       const hashedPassword = await this.hashPassword(registerDto.password);
 
+      // Gerar token de verificação de email
+      const emailVerificationToken = uuidv4();
+
       // Criar usuário
+      // Role: ADMIN se for novo cliente, senão CLIENT (ou role fornecida)
+      const userRole = isNewClient ? 'ADMIN' : registerDto.role || 'CLIENT';
+
       const user = await this.prisma.user.create({
         data: {
-          ...registerDto,
+          name: registerDto.name,
+          email: registerDto.email,
           password: hashedPassword,
-          clientId,
-          role: registerDto.role || 'CLIENT',
+          phone: registerDto.phone,
+          clientId: usedClientId,
+          role: userRole,
+          emailVerificationToken,
         },
         include: {
           client: {
-            select: { id: true, name: true, status: true },
+            select: { id: true, name: true, status: true, activeServices: true },
           },
         },
       });
+
+      // Enviar email de verificação (não bloquear registro se falhar)
+      try {
+        await this.emailService.sendVerificationEmail(
+          user.email,
+          emailVerificationToken,
+          user.name,
+        );
+        this.logger.log(`Email de verificação enviado para: ${user.email}`);
+      } catch (emailError) {
+        this.logger.warn(`Falha ao enviar email de verificação para ${user.email}:`, emailError);
+        // Não falhar o registro se o email não puder ser enviado
+      }
 
       const { password: _, ...userWithoutPassword } = user;
 
@@ -218,20 +372,34 @@ export class AuthService {
       // Notificar registro bem-sucedido
       await this.telegramService.sendCustomAlert(
         'success',
-        '✅ NOVO USUÁRIO REGISTRADO',
-        `Novo usuário registrado: ${user.email} (${user.role})`,
-        { email: user.email, role: user.role, clientId, userId: user.id, timestamp: new Date() },
+        isNewClient ? '🎉 NOVO CLIENTE REGISTRADO' : '✅ NOVO USUÁRIO REGISTRADO',
+        isNewClient
+          ? `Novo cliente criado: ${client.name} com ${registerDto.activeServices?.length || 0} serviços`
+          : `Novo usuário registrado: ${user.email} (${user.role}) para cliente ${client.name}`,
+        {
+          email: user.email,
+          role: user.role,
+          clientId: usedClientId,
+          clientName: client.name,
+          userId: user.id,
+          isNewClient,
+          activeServices: isNewClient ? registerDto.activeServices : client.activeServices,
+          timestamp: new Date(),
+        },
       );
 
       return {
         success: true,
-        message: 'Usuário registrado com sucesso',
+        message: isNewClient
+          ? 'Empresa e usuário criados com sucesso!'
+          : 'Usuário registrado com sucesso!',
         data: {
           token: accessToken,
           client_id: user.clientId,
           user: userWithoutPassword,
           refresh_token: refreshToken,
           expires_in: this.configService.get('JWT_EXPIRATION'),
+          isNewClient, // Retornar flag para o frontend saber
         },
       };
     } catch (error) {
@@ -620,6 +788,277 @@ export class AuthService {
       this.logger.error('Erro ao enviar notificação de falha do Telegram:', notificationError);
       this.logger.error('Stack trace:', notificationError.stack);
       // Não falhar a operação se a notificação falhar
+    }
+  }
+
+  /**
+   * Solicitar recuperação de senha
+   */
+  async forgotPassword(forgotPasswordDto: ForgotPasswordDto, clientId?: string) {
+    const { email } = forgotPasswordDto;
+
+    try {
+      // Buscar usuário
+      const user = await this.prisma.user.findFirst({
+        where: {
+          email,
+          ...(clientId && { clientId }),
+          status: 'ACTIVE',
+        },
+      });
+
+      // Por segurança, sempre retornar sucesso mesmo se o usuário não existir
+      if (!user) {
+        this.logger.warn(`Tentativa de recuperação de senha para email inexistente: ${email}`);
+        return {
+          success: true,
+          message: 'Se o email existir, você receberá instruções para redefinir sua senha.',
+        };
+      }
+
+      // Gerar token de recuperação
+      const resetToken = uuidv4();
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 1); // Token expira em 1 hora
+
+      // Atualizar usuário com token
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          passwordResetToken: resetToken,
+          passwordResetTokenExpiresAt: expiresAt,
+        },
+      });
+
+      // Enviar email
+      await this.emailService.sendPasswordResetEmail(email, resetToken, user.name);
+
+      // Notificar via Telegram
+      await this.telegramService.sendCustomAlert(
+        'info',
+        '🔑 RECUPERAÇÃO DE SENHA SOLICITADA',
+        `Recuperação de senha solicitada para: ${email}`,
+        {
+          email,
+          userId: user.id,
+          clientId: user.clientId,
+          timestamp: new Date(),
+        },
+      );
+
+      return {
+        success: true,
+        message: 'Se o email existir, você receberá instruções para redefinir sua senha.',
+      };
+    } catch (error) {
+      this.logger.error(`Erro na recuperação de senha para ${email}:`, error);
+
+      // Não expor erro detalhado por segurança
+      return {
+        success: true,
+        message: 'Se o email existir, você receberá instruções para redefinir sua senha.',
+      };
+    }
+  }
+
+  /**
+   * Redefinir senha
+   */
+  async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    const { token, password } = resetPasswordDto;
+
+    try {
+      // Buscar usuário com o token válido
+      const user = await this.prisma.user.findFirst({
+        where: {
+          passwordResetToken: token,
+          passwordResetTokenExpiresAt: {
+            gte: new Date(), // Token ainda não expirou
+          },
+        },
+      });
+
+      if (!user) {
+        await this.telegramService.sendCustomAlert(
+          'warning',
+          '⚠️ TENTATIVA DE RESET COM TOKEN INVÁLIDO',
+          'Alguém tentou redefinir senha com token inválido ou expirado',
+          { token: token.substring(0, 10) + '...', timestamp: new Date() },
+        );
+        throw new BadRequestException('Token inválido ou expirado');
+      }
+
+      // Hash da nova senha
+      const hashedPassword = await this.hashPassword(password);
+
+      // Atualizar senha e limpar token
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          password: hashedPassword,
+          passwordResetToken: null,
+          passwordResetTokenExpiresAt: null,
+        },
+      });
+
+      // Remover todos os refresh tokens do usuário (forçar novo login)
+      await this.prisma.refreshToken.deleteMany({
+        where: { userId: user.id },
+      });
+
+      // Notificar via Telegram
+      await this.telegramService.sendCustomAlert(
+        'success',
+        '✅ SENHA REDEFINIDA',
+        `Senha redefinida com sucesso para: ${user.email}`,
+        {
+          email: user.email,
+          userId: user.id,
+          clientId: user.clientId,
+          timestamp: new Date(),
+        },
+      );
+
+      return {
+        success: true,
+        message: 'Senha redefinida com sucesso. Faça login com a nova senha.',
+      };
+    } catch (error) {
+      if (!(error instanceof BadRequestException)) {
+        await this.telegramService.sendCustomAlert(
+          'error',
+          '🚨 ERRO NO RESET DE SENHA',
+          `Erro ao redefinir senha: ${error.message}`,
+          { error: error.stack, timestamp: new Date() },
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Verificar email
+   */
+  async verifyEmail(verifyEmailDto: VerifyEmailDto) {
+    const { token } = verifyEmailDto;
+
+    try {
+      // Buscar usuário com o token
+      const user = await this.prisma.user.findFirst({
+        where: {
+          emailVerificationToken: token,
+        },
+      });
+
+      if (!user) {
+        await this.telegramService.sendCustomAlert(
+          'warning',
+          '⚠️ TENTATIVA DE VERIFICAÇÃO COM TOKEN INVÁLIDO',
+          'Alguém tentou verificar email com token inválido',
+          { token: token.substring(0, 10) + '...', timestamp: new Date() },
+        );
+        throw new BadRequestException('Token de verificação inválido');
+      }
+
+      if (user.emailVerified) {
+        return {
+          success: true,
+          message: 'Email já verificado anteriormente.',
+        };
+      }
+
+      // Marcar email como verificado
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+          emailVerificationToken: null,
+        },
+      });
+
+      // Notificar via Telegram
+      await this.telegramService.sendCustomAlert(
+        'success',
+        '✅ EMAIL VERIFICADO',
+        `Email verificado com sucesso: ${user.email}`,
+        {
+          email: user.email,
+          userId: user.id,
+          clientId: user.clientId,
+          timestamp: new Date(),
+        },
+      );
+
+      return {
+        success: true,
+        message: 'Email verificado com sucesso!',
+      };
+    } catch (error) {
+      if (!(error instanceof BadRequestException)) {
+        await this.telegramService.sendCustomAlert(
+          'error',
+          '🚨 ERRO NA VERIFICAÇÃO DE EMAIL',
+          `Erro ao verificar email: ${error.message}`,
+          { error: error.stack, timestamp: new Date() },
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Enviar email de verificação (pode ser chamado novamente se necessário)
+   */
+  async resendVerificationEmail(email: string, clientId?: string) {
+    try {
+      const user = await this.prisma.user.findFirst({
+        where: {
+          email,
+          ...(clientId && { clientId }),
+        },
+      });
+
+      if (!user) {
+        // Por segurança, não revelar se o email existe
+        return {
+          success: true,
+          message: 'Se o email existir, um novo link de verificação será enviado.',
+        };
+      }
+
+      if (user.emailVerified) {
+        return {
+          success: true,
+          message: 'Email já verificado.',
+        };
+      }
+
+      // Gerar novo token
+      const verificationToken = uuidv4();
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          emailVerificationToken: verificationToken,
+        },
+      });
+
+      // Enviar email
+      await this.emailService.sendVerificationEmail(email, verificationToken, user.name);
+
+      return {
+        success: true,
+        message: 'Se o email existir, um novo link de verificação será enviado.',
+      };
+    } catch (error) {
+      this.logger.error(`Erro ao reenviar email de verificação para ${email}:`, error);
+
+      // Não expor erro detalhado
+      return {
+        success: true,
+        message: 'Se o email existir, um novo link de verificação será enviado.',
+      };
     }
   }
 

@@ -545,4 +545,297 @@ export class ClientsService {
     this.logger.error(`❌ Service: Erro ao buscar clientes por employee: ${error.message}`);
     throw error;
   }
+
+  // Adicionar estes métodos no ClientsService antes do último }
+
+  async getClientsForDashboard() {
+    this.logger.log('📊 === Service: getClientsForDashboard ===');
+
+    try {
+      const clients = await this.prisma.client.findMany({
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          email: true,
+          phone: true,
+          website: true,
+          status: true,
+          plan: true,
+          createdAt: true,
+          updatedAt: true,
+          _count: {
+            select: {
+              users: true,
+              appointments: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      const clientsWithStats = await Promise.all(
+        clients.map(async (client) => {
+          // Calcular estatísticas adicionais
+          const lastActive = await this.prisma.user.findFirst({
+            where: { clientId: client.id },
+            orderBy: { lastLogin: 'desc' },
+            select: { lastLogin: true },
+          });
+
+          const monthlyRequests = await this.calculateMonthlyRequests(client.id);
+          const avgResponseTime = await this.calculateAvgResponseTime(client.id);
+          const uptime = await this.calculateUptime(client.id);
+
+          return {
+            ...client,
+            users: client._count.users,
+            appointments: client._count.appointments,
+            lastActive: lastActive?.lastLogin || client.updatedAt,
+            monthlyRequests,
+            avgResponseTime,
+            uptime,
+            _count: undefined,
+          };
+        }),
+      );
+
+      this.logger.log(`✅ Service: ${clientsWithStats.length} clientes obtidos para dashboard`);
+      return clientsWithStats;
+    } catch (error) {
+      this.logger.error(`❌ Service: Erro ao obter clientes para dashboard: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async getClientForDashboard(clientId: string) {
+    this.logger.log(`📊 === Service: getClientForDashboard - ClientId: ${clientId} ===`);
+
+    try {
+      const client = await this.prisma.client.findUnique({
+        where: { id: clientId },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          email: true,
+          phone: true,
+          website: true,
+          status: true,
+          plan: true,
+          createdAt: true,
+          updatedAt: true,
+          settings: true,
+          activeServices: true,
+          _count: {
+            select: {
+              users: true,
+              appointments: true,
+              orders: true,
+              payments: true,
+            },
+          },
+        },
+      });
+
+      if (!client) {
+        throw new Error(`Cliente com ID ${clientId} não encontrado`);
+      }
+
+      // Calcular estatísticas detalhadas
+      const stats = await this.calculateDetailedStats(clientId);
+
+      const clientWithStats = {
+        ...client,
+        users: client._count.users,
+        appointments: client._count.appointments,
+        orders: client._count.orders,
+        payments: client._count.payments,
+        stats,
+        _count: undefined,
+      };
+
+      this.logger.log(`✅ Service: Cliente ${clientId} obtido para dashboard`);
+      return clientWithStats;
+    } catch (error) {
+      this.logger.error(`❌ Service: Erro ao obter cliente para dashboard: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async getServicesForClient(clientId: string) {
+    this.logger.log(`📊 === Service: getServiceForClient - ClientId: ${clientId} ===`);
+
+    try {
+      const services = await this.prisma.client.findUnique({
+        where: { id: clientId },
+        select: {
+          activeServices: true,
+        },
+      });
+
+      if (!services) {
+        throw new Error(`Servicos para o cliente com ID ${clientId} não encontrado`);
+      }
+
+      this.logger.log(`✅ Service: Servicos para o cliente ${clientId} obtido para dashboard`);
+      return services;
+    } catch (error) {
+      this.logger.error(
+        `❌ Service: Erro ao obter servicos para o cliente para dashboard: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  async createClientFromDashboard(createClientDto: CreateClientDto) {
+    this.logger.log('📊 === Service: createClientFromDashboard ===');
+
+    try {
+      const client = await this.prisma.client.create({
+        data: {
+          ...createClientDto,
+          slug: this.generateSlug(createClientDto.name),
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          email: true,
+          phone: true,
+          website: true,
+          status: true,
+          plan: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      this.logger.log(`✅ Service: Cliente ${client.id} criado via dashboard`);
+      return client;
+    } catch (error) {
+      this.logger.error(`❌ Service: Erro ao criar cliente via dashboard: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async updateClientFromDashboard(clientId: string, updateClientDto: UpdateClientDto) {
+    this.logger.log(`📊 === Service: updateClientFromDashboard - ClientId: ${clientId} ===`);
+
+    try {
+      const client = await this.prisma.client.update({
+        where: { id: clientId },
+        data: updateClientDto,
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          email: true,
+          phone: true,
+          website: true,
+          status: true,
+          plan: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      this.logger.log(`✅ Service: Cliente ${clientId} atualizado via dashboard`);
+      return client;
+    } catch (error) {
+      this.logger.error(`❌ Service: Erro ao atualizar cliente via dashboard: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async deleteClientFromDashboard(clientId: string) {
+    this.logger.log(`📊 === Service: deleteClientFromDashboard - ClientId: ${clientId} ===`);
+
+    try {
+      await this.prisma.client.delete({
+        where: { id: clientId },
+      });
+
+      this.logger.log(`✅ Service: Cliente ${clientId} excluído via dashboard`);
+      return { message: 'Cliente excluído com sucesso' };
+    } catch (error) {
+      this.logger.error(`❌ Service: Erro ao excluir cliente via dashboard: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // Métodos auxiliares
+  private async calculateMonthlyRequests(clientId: string): Promise<number> {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const count = await this.prisma.appointment.count({
+      where: {
+        clientId,
+        createdAt: {
+          gte: thirtyDaysAgo,
+        },
+      },
+    });
+
+    return count;
+  }
+
+  private async calculateAvgResponseTime(clientId: string): Promise<number> {
+    // Simulação - você pode implementar lógica real baseada em logs
+    return Math.floor(Math.random() * 200) + 100;
+  }
+
+  private async calculateUptime(clientId: string): Promise<number> {
+    // Simulação - você pode implementar lógica real baseada em health checks
+    return Math.floor(Math.random() * 5) + 95;
+  }
+
+  private async calculateDetailedStats(clientId: string) {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const [totalUsers, activeUsers, totalAppointments, monthlyAppointments] = await Promise.all([
+      this.prisma.user.count({ where: { clientId } }),
+      this.prisma.user.count({
+        where: {
+          clientId,
+          lastLogin: {
+            gte: thirtyDaysAgo,
+          },
+        },
+      }),
+      this.prisma.appointment.count({ where: { clientId } }),
+      this.prisma.appointment.count({
+        where: {
+          clientId,
+          createdAt: {
+            gte: thirtyDaysAgo,
+          },
+        },
+      }),
+    ]);
+
+    return {
+      totalUsers,
+      activeUsers,
+      totalAppointments,
+      monthlyAppointments,
+      avgResponseTime: await this.calculateAvgResponseTime(clientId),
+      uptime: await this.calculateUptime(clientId),
+    };
+  }
+
+  private generateSlug(name: string): string {
+    return name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .trim();
+  }
 }

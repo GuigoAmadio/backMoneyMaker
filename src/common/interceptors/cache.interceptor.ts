@@ -18,7 +18,11 @@ export class CacheInterceptor implements NestInterceptor {
 
   async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<any>> {
     const request = context.switchToHttp().getRequest();
-    const clientId = request.headers['client-id'] || request.user?.clientId;
+    const clientId =
+      request.user?.impersonatedClientId || // 1. Impersonation (do JwtAuthGuard)
+      request.headers['xx-client-id'] || // 3. Header x-client-id
+      request.clientId || // 2. request.clientId (setado pelo Guard)
+      request.user?.clientId; // 5. JWT user.clientId
 
     // Verificar se o método tem cache habilitado
     const cacheKey = this.reflector.get<string>(CACHE_KEY_METADATA, context.getHandler());

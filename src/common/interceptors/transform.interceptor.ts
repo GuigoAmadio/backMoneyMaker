@@ -2,21 +2,13 @@ import { Injectable, NestInterceptor, ExecutionContext, CallHandler, Logger } fr
 import { Observable } from 'rxjs';
 import { map, tap } from 'rxjs/operators';
 import { Request } from 'express';
-
-export interface Response<T> {
-  success: boolean;
-  data: T;
-  message?: string;
-  timestamp: string;
-  path: string;
-  method: string;
-}
+import { ApiResponse } from '../interfaces/api-response.interface';
 
 @Injectable()
-export class TransformInterceptor<T> implements NestInterceptor<T, Response<T>> {
+export class TransformInterceptor<T> implements NestInterceptor<T, ApiResponse<T>> {
   private readonly logger = new Logger(TransformInterceptor.name);
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<Response<T>> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<ApiResponse<T>> {
     const request = context.switchToHttp().getRequest<Request>();
     const startTime = Date.now();
 
@@ -28,10 +20,10 @@ export class TransformInterceptor<T> implements NestInterceptor<T, Response<T>> 
       map((data) => {
         this.logger.log(`=== TransformInterceptor: Transformando resposta ===`);
 
-        // Se a resposta já tem a estrutura esperada (success, data, message), não transformar
-        if (data && typeof data === 'object' && 'success' in data && 'data' in data) {
+        // Se a resposta já tem a estrutura esperada (success, data), não transformar
+        if (data && typeof data === 'object' && 'success' in data) {
           this.logger.log(`=== TransformInterceptor: Resposta já tem estrutura esperada ===`);
-          return data;
+          return data as ApiResponse<T>;
         }
 
         // Caso contrário, aplicar a transformação padrão
@@ -39,8 +31,6 @@ export class TransformInterceptor<T> implements NestInterceptor<T, Response<T>> 
         return {
           success: true,
           data,
-          message: null,
-          error: null,
         };
       }),
       tap(() => {

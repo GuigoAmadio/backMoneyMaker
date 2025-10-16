@@ -191,8 +191,10 @@ export class ScheduleService {
   /**
    * Listar agendas com filtros
    */
-  async findAll(clientId: string, userId: string, filters: GetSchedulesDto) {
-    this.logger.log(`Listando agendas para clientId: ${clientId}, userId: ${userId}`);
+  async findAll(clientId: string, userId: string, filters: GetSchedulesDto, role: string) {
+    this.logger.log(
+      `Listando agendas para clientId: ${clientId}, userId: ${userId}, role: ${role}`,
+    );
 
     try {
       const {
@@ -215,10 +217,18 @@ export class ScheduleService {
         clientId,
       };
 
-      // Se não for busca apenas pública, incluir agendas do usuário
-      if (!publicOnly) {
+      // ========================================
+      // 🔐 SUPER_ADMIN: Pode ver TODOS os agendamentos do cliente
+      // ========================================
+      if (role === 'SUPER_ADMIN' && !userId) {
+        this.logger.log(`🔓 SUPER_ADMIN acessando TODOS os agendamentos do clientId: ${clientId}`);
+        // Não adiciona filtro de userId - busca TODOS os agendamentos do cliente
+        // O where já tem apenas clientId, então vai buscar tudo
+      } else if (!publicOnly) {
+        // Comportamento padrão: usuário vê suas agendas + agendas públicas
         where.OR = [{ userId }, { isPublic: true }];
       } else {
+        // Busca apenas agendas públicas
         where.isPublic = true;
       }
 

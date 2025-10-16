@@ -68,8 +68,11 @@ export class ScheduleController {
   @ApiQuery({ name: 'sortBy', required: false, description: 'Campo para ordenação (padrão: date)' })
   @ApiQuery({ name: 'sortOrder', required: false, description: 'Ordem (asc/desc, padrão: asc)' })
   async findAll(@Request() req, @Query() query: GetSchedulesDto) {
-    const { clientId, id: userId } = req.user;
-    return this.scheduleService.findAll(clientId, userId, query);
+    const clientId = req.clientId;
+    const role = req.user.role;
+    const userId = req.userId;
+    this.logger.log(`clientId: ${clientId}, userId: ${userId}, role: ${role}`);
+    return this.scheduleService.findAll(clientId, userId, query, role);
   }
 
   @Get('today')

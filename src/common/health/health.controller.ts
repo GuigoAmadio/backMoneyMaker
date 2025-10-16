@@ -1,13 +1,11 @@
 import { Controller, Get } from '@nestjs/common';
-import { HealthCheck, HealthCheckService, HttpHealthIndicator, DiskHealthIndicator, MemoryHealthIndicator } from '@nestjs/terminus';
+import { HealthCheck, HealthCheckService, MemoryHealthIndicator } from '@nestjs/terminus';
 import { HealthService } from './health.service';
 
-@Controller('health')
+@Controller({ path: 'health', version: '1' })
 export class HealthController {
   constructor(
     private health: HealthCheckService,
-    private http: HttpHealthIndicator,
-    private disk: DiskHealthIndicator,
     private memory: MemoryHealthIndicator,
     private healthService: HealthService,
   ) {}
@@ -16,16 +14,12 @@ export class HealthController {
   @HealthCheck()
   check() {
     return this.health.check([
-      // Verificar se a aplicação responde
-      () => this.http.pingCheck('nestjs-docs', 'https://docs.nestjs.com'),
-      
-      // Verificar espaço em disco
-      () => this.disk.checkStorage('storage', { path: '/', thresholdPercent: 0.9 }),
-      
-      // Verificar uso de memória
+      // Verificar espaï¿½o em disco
+
+      // Verificar uso de memï¿½ria
       () => this.memory.checkHeap('memory_heap', 300 * 1024 * 1024), // 300MB
-      
-      // Verificações customizadas
+
+      // Verificaï¿½ï¿½es customizadas
       () => this.healthService.checkDatabase(),
       () => this.healthService.checkRedis(),
       () => this.healthService.checkServerHealth(),

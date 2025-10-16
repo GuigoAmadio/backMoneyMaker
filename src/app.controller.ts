@@ -13,11 +13,4 @@ export class AppController {
   getHello(): object {
     return this.appService.getHello();
   }
-
-  @Get('health')
-  @ApiOperation({ summary: 'Status detalhado da aplicação' })
-  @ApiResponse({ status: 200, description: 'Status detalhado do sistema' })
-  getHealth(): object {
-    return this.appService.getHealth();
-  }
 }

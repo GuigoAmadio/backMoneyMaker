@@ -24,6 +24,7 @@ import { PropertiesModule } from './modules/properties/properties.module';
 import { EcommerceModule } from './modules/ecommerce/ecommerce.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
+import { FinancesModule } from './modules/finances/finances.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { LoggerInterceptor } from './common/logger/logger.interceptor';
 import { LoggerModule } from './common/logger/logger.module';
@@ -34,13 +35,20 @@ import { TelegramModule } from './common/notifications/telegram.module';
 import { CacheModule } from './common/cache/cache.module';
 import { TenantInterceptor } from './common/tenant/tenant.interceptor';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
-import { JwtStrategy } from './modules/auth/strategies/jwt.strategy';
+import { JwtStrategy } from './common/strategies/jwt.strategy';
 import { MetricsMiddleware } from './common/metrics/metrics.middleware';
 import { TelegramSecurityMiddleware } from './common/notifications/telegram.middleware';
 import { CacheEventsModule } from './cache-events/cache-events.module';
 import { DashboardModule as NewDashboardModule } from './dashboard/dashboard.module';
 import { SettingsModule } from './settings/settings.module';
 import { ServicesModule as NewServicesModule } from './services/services.module';
+import { HealthModule } from './common/health/health.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { DatabaseModule as DatabaseManagementModule } from './modules/database/database.module';
+import { StripeModule } from './modules/stripe/stripe.module';
+import { LogsModule } from './modules/logs/logs.module';
+import { EventModule } from './common/events/event.module';
+import { AIModule } from './modules/ai/ai.module';
 
 @Module({
   imports: [
@@ -62,6 +70,9 @@ import { ServicesModule as NewServicesModule } from './services/services.module'
 
     // Database
     DatabaseModule,
+
+    // Event System (deve vir antes dos outros módulos)
+    EventModule,
 
     // Multi-tenancy
     TenantModule,
@@ -94,6 +105,7 @@ import { ServicesModule as NewServicesModule } from './services/services.module'
     AnnotationsModule,
     PropertiesModule,
     ScheduleModule,
+    FinancesModule,
 
     // Ecommerce
     EcommerceModule,
@@ -107,6 +119,12 @@ import { ServicesModule as NewServicesModule } from './services/services.module'
     NewDashboardModule,
     SettingsModule,
     NewServicesModule,
+    HealthModule,
+    AnalyticsModule,
+    DatabaseManagementModule,
+    StripeModule,
+    LogsModule,
+    AIModule,
   ],
   controllers: [AppController],
   providers: [
