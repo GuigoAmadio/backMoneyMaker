@@ -9,6 +9,7 @@ import { AppService } from './app.service';
 import { DatabaseModule } from './database/database.module';
 import { TenantModule } from './common/tenant/tenant.module';
 
+import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
 // Módulos de domínio
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -25,6 +26,7 @@ import { EcommerceModule } from './modules/ecommerce/ecommerce.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
 import { FinancesModule } from './modules/finances/finances.module';
+import { TasksModule } from './modules/tasks/tasks.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { LoggerInterceptor } from './common/logger/logger.interceptor';
 import { LoggerModule } from './common/logger/logger.module';
@@ -106,6 +108,7 @@ import { AIModule } from './modules/ai/ai.module';
     PropertiesModule,
     ScheduleModule,
     FinancesModule,
+    TasksModule,
 
     // Ecommerce
     EcommerceModule,
@@ -125,6 +128,7 @@ import { AIModule } from './modules/ai/ai.module';
     StripeModule,
     LogsModule,
     AIModule,
+    WhatsAppModule,
   ],
   controllers: [AppController],
   providers: [
