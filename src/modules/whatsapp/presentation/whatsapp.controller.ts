@@ -14,7 +14,6 @@ import { ConfigService } from '@nestjs/config';
 @Controller({ path: 'whatsapp', version: '1' })
 export class WhatsAppController {
   private readonly logger = new Logger(WhatsAppController.name);
-
   constructor(
     private readonly processIncomingMessageUseCase: ProcessIncomingMessageUseCase,
     private readonly sendMessageUseCase: SendMessageUseCase,

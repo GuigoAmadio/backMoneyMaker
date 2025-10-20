@@ -17,6 +17,12 @@ import { MessageContent } from '../../domain/value-objects/message-content.vo';
 export class WhatsAppMessageRepository implements IWhatsAppMessageRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Métodos upsert do Prisma fazem "update ou insert":
+   * - Se existir um registro com o 'where', faz UPDATE nos campos definidos em 'update'
+   * - Se não existir, faz INSERT com os valores de 'create'
+   * Dessa forma, podemos garantir que a mensagem é salva caso novo, ou atualizada caso já exista.
+   */
   async save(message: WhatsAppMessage): Promise<void> {
     await this.prisma.whatsAppMessage.upsert({
       where: { id: message.getId() },
